@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=overlays-content" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-visual" />
   <meta name="theme-color" content="#000000" />
   <meta name="application-name" content="Codex mini" />
   <meta name="apple-mobile-web-app-title" content="Codex mini" />
@@ -72,8 +72,8 @@
       --app-height: 100dvh;
       --app-top: 0px;
       --keyboard-shift: 0px;
-      --keyboard-composer-gap: 0px;
-      --keyboard-shift-trim: 15px;
+      --keyboard-composer-gap: 8px;
+      --keyboard-shift-trim: 0px;
       --keyboard-gap-bg: #0d0d0d;
       --composer-bottom-pad: max(56px, calc(env(safe-area-inset-bottom) + 30px));
       --composer-signature-gap: 15px;
@@ -89,7 +89,7 @@
       font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, "PingFang SC", sans-serif;
     }
     :root.android-keyboard-mode {
-      --keyboard-shift-trim: 56px;
+      --keyboard-shift-trim: 0px;
     }
     @media (dynamic-range: high) {
       @supports (dynamic-range-limit: no-limit) {
@@ -1849,6 +1849,10 @@
     }
     body.keyboard-open {
       background: var(--keyboard-gap-bg);
+    }
+    body.keyboard-open .thread,
+    body.keyboard-open .composer-shell {
+      transition: none;
     }
     @media (min-width: 900px) and (min-height: 650px) {
       .thread {
@@ -4768,6 +4772,27 @@
       return Math.round(Math.max(maxViewportHeight, window.innerHeight || 0, document.documentElement.clientHeight || 0, viewportHeight || 0));
     }
 
+    function resetKeyboardLayout(options = {}) {
+      if (keyboardAlignRaf) {
+        window.cancelAnimationFrame(keyboardAlignRaf);
+        keyboardAlignRaf = 0;
+      }
+      if (options.clearTimers) {
+        keyboardAlignmentTimers.forEach(timer => window.clearTimeout(timer));
+        keyboardAlignmentTimers = [];
+        keyboardPinTimers.forEach(timer => window.clearTimeout(timer));
+        keyboardPinTimers = [];
+      }
+      document.body.classList.remove('keyboard-open');
+      keyboardComposerRevealDone = false;
+      keyboardFocusStartedAt = 0;
+      keyboardShiftTarget = 0;
+      document.documentElement.style.setProperty('--app-top', '0px');
+      document.documentElement.style.setProperty('--app-height', `${stableViewportHeight()}px`);
+      document.documentElement.style.setProperty('--keyboard-shift', '0px');
+      keepLayoutViewportPinned();
+    }
+
     function pinLayoutForKeyboardFocus() {
       keyboardPinTimers.forEach(timer => window.clearTimeout(timer));
       keepLayoutViewportPinned();
@@ -4840,14 +4865,16 @@
       const viewportShrink = viewport ? Math.max(0, maxViewportHeight - viewportHeight) : 0;
       const focusAge = focused && keyboardFocusStartedAt ? performance.now() - keyboardFocusStartedAt : Infinity;
       const previousShift = currentKeyboardShift();
-      const keyboardOpen = focused && (viewportShrink > 80 || previousShift > 0 || keyboardShiftTarget > 0 || focusAge < 900);
+      const keyboardOpen = focused && (viewportShrink > 80 || focusAge < 900);
+      if (!keyboardOpen && (previousShift > 0 || keyboardShiftTarget > 0 || document.body.classList.contains('keyboard-open'))) {
+        resetKeyboardLayout();
+        return false;
+      }
       document.body.classList.toggle('keyboard-open', keyboardOpen);
       document.documentElement.style.setProperty('--app-top', '0px');
       document.documentElement.style.setProperty('--app-height', `${Math.max(maxViewportHeight, viewportHeight)}px`);
       if (!keyboardOpen || !viewportHeight) {
-        keyboardShiftTarget = 0;
-        document.documentElement.style.setProperty('--keyboard-shift', '0px');
-        keepLayoutViewportPinned();
+        resetKeyboardLayout();
         return false;
       }
 
@@ -4860,7 +4887,7 @@
       const composerBottomWithoutShift = composer.getBoundingClientRect().bottom + previousShift;
       const desiredGapRaw = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--keyboard-composer-gap'));
       const desiredGap = Number.isFinite(desiredGapRaw) ? desiredGapRaw : 0;
-      const maxReasonableShift = Math.max(180, maxViewportHeight * 0.46);
+      const maxReasonableShift = Math.max(220, maxViewportHeight * 0.62);
       const maxShift = Math.max(0, Math.min(viewportShrink + 24, maxReasonableShift));
       const viewportBottom = isChromeKeyboardBrowser && viewport
         ? Math.round((viewport.offsetTop || 0) + viewportHeight)
@@ -4869,7 +4896,7 @@
       const shiftTrimRaw = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--keyboard-shift-trim'));
       const shiftTrim = Number.isFinite(shiftTrimRaw) ? shiftTrimRaw : 36;
       const adjustedShift = clampNumber(measuredShift - shiftTrim, 0, maxShift);
-      const nextShift = Math.max(keyboardShiftTarget, adjustedShift);
+      const nextShift = adjustedShift;
       keyboardShiftTarget = Math.round(nextShift);
       document.documentElement.style.setProperty('--keyboard-shift', `${keyboardShiftTarget}px`);
       keepLayoutViewportPinned();
@@ -4887,6 +4914,20 @@
           keyboardComposerRevealDone = true;
         }
       });
+    }
+
+    function handleViewportKeyboardChange() {
+      const viewport = window.visualViewport;
+      if (viewport) {
+        const viewportHeight = Math.round(viewport.height || 0);
+        const restored = viewportHeight > 0 && maxViewportHeight - viewportHeight <= 64;
+        if (restored && (currentKeyboardShift() > 0 || document.body.classList.contains('keyboard-open'))) {
+          resetKeyboardLayout();
+          requestAnimationFrame(positionComposerSignature);
+          return;
+        }
+      }
+      alignComposerForKeyboard();
     }
 
     function scheduleKeyboardAlignment() {
@@ -4916,14 +4957,7 @@
       if (suppressNextTextareaBlurRestore) {
         suppressNextTextareaBlurRestore = false;
         stopKeyboardMonitor();
-        keyboardAlignmentTimers.forEach(timer => window.clearTimeout(timer));
-        keyboardAlignmentTimers = [];
-        document.body.classList.remove('keyboard-open');
-        keyboardComposerRevealDone = false;
-        keyboardFocusStartedAt = 0;
-        keyboardShiftTarget = 0;
-        document.documentElement.style.setProperty('--keyboard-shift', '0px');
-        keepLayoutViewportPinned();
+        resetKeyboardLayout({ clearTimers: true });
         return;
       }
       const now = performance.now();
@@ -4942,22 +4976,7 @@
         return;
       }
       stopKeyboardMonitor();
-      keyboardAlignmentTimers.forEach(timer => window.clearTimeout(timer));
-      keyboardAlignmentTimers = [];
-      keyboardPinTimers.forEach(timer => window.clearTimeout(timer));
-      keyboardPinTimers = [];
-      if (keyboardAlignRaf) {
-        window.cancelAnimationFrame(keyboardAlignRaf);
-        keyboardAlignRaf = 0;
-      }
-      document.body.classList.remove('keyboard-open');
-      keyboardComposerRevealDone = false;
-      keyboardFocusStartedAt = 0;
-      keyboardShiftTarget = 0;
-      document.documentElement.style.setProperty('--app-top', '0px');
-      document.documentElement.style.setProperty('--app-height', `${Math.max(maxViewportHeight, window.innerHeight || 0, document.documentElement.clientHeight || 0)}px`);
-      document.documentElement.style.setProperty('--keyboard-shift', '0px');
-      keepLayoutViewportPinned();
+      resetKeyboardLayout({ clearTimers: true });
       requestAnimationFrame(() => {
         thread.scrollTop = thread.scrollHeight;
         positionComposerSignature();
@@ -7689,7 +7708,7 @@
     textarea.addEventListener('touchend', scheduleKeyboardAlignment, { passive: true });
     textarea.addEventListener('blur', restoreLayoutAfterKeyboard);
     window.addEventListener('scroll', keepLayoutViewportPinned, { passive: true });
-    window.addEventListener('resize', alignComposerForKeyboard);
+    window.addEventListener('resize', handleViewportKeyboardChange);
     window.addEventListener('resize', alignTopActionsRight);
     window.addEventListener('resize', positionThreadMenuCard);
     window.addEventListener('resize', positionSettingsCard);
@@ -7702,8 +7721,8 @@
     window.addEventListener('orientationchange', () => window.setTimeout(positionPermissionMenu, 250));
     window.addEventListener('orientationchange', () => window.setTimeout(positionComposerSignature, 250));
     if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', alignComposerForKeyboard);
-      window.visualViewport.addEventListener('scroll', alignComposerForKeyboard);
+      window.visualViewport.addEventListener('resize', handleViewportKeyboardChange);
+      window.visualViewport.addEventListener('scroll', handleViewportKeyboardChange);
       window.visualViewport.addEventListener('resize', positionThreadMenuCard);
       window.visualViewport.addEventListener('scroll', positionThreadMenuCard);
       window.visualViewport.addEventListener('resize', positionSettingsCard);
