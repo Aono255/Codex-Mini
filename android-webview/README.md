@@ -20,7 +20,7 @@ app/build/outputs/apk/debug/app-debug.apk
 The app opens:
 
 ```text
-http://154.37.222.164/
+http://154.37.222.164/login
 ```
 
 The project explicitly allows cleartext HTTP traffic to this IP. Move the relay

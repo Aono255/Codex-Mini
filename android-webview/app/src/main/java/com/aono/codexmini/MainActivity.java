@@ -23,7 +23,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
 public class MainActivity extends Activity {
-    private static final String REMOTE_URL = "http://154.37.222.164/";
+    private static final String REMOTE_URL = "http://154.37.222.164/login";
 
     private WebView webView;
 
