@@ -65,6 +65,13 @@ const codexThreadListCache = new Map();
 let modelCatalogCache = { mtimeMs: -1, path: '', models: null };
 let keepAwakeProcess = null;
 let keepAwakeStartedAt = '';
+const GUARDIAN_APP_BUNDLE_ID = process.env.CODEX_MINI_GUARDIAN_BUNDLE_ID || 'com.kang.codex-mini.app';
+const GUARDIAN_APP_PATH = process.env.CODEX_MINI_GUARDIAN_APP_PATH || '/Applications/Codex Mini.app';
+const GUARDIAN_AUTO_ENABLED_KEY = 'CodexMiniGuardianAutoEnabled';
+const GUARDIAN_IDLE_MINUTES_KEY = 'CodexMiniGuardianIdleMinutes';
+const GUARDIAN_DEFAULT_IDLE_MINUTES = 5;
+const GUARDIAN_MIN_IDLE_MINUTES = 1;
+const GUARDIAN_MAX_IDLE_MINUTES = 180;
 
 function fileCacheSignature(stat) {
   return stat ? `${stat.size}:${stat.mtimeMs}` : '';
@@ -133,6 +140,96 @@ function stopKeepAwake() {
 
 function cleanupKeepAwake() {
   stopKeepAwake();
+}
+
+function clampGuardianIdleMinutes(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return GUARDIAN_DEFAULT_IDLE_MINUTES;
+  return Math.round(Math.min(GUARDIAN_MAX_IDLE_MINUTES, Math.max(GUARDIAN_MIN_IDLE_MINUTES, number)));
+}
+
+function runGuardianCommand(command, args = [], timeoutMs = 4000) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    const timer = setTimeout(() => {
+      try { child.kill('SIGTERM'); } catch {}
+      reject(new Error(`${command} timed out`));
+    }, timeoutMs);
+    child.stdout.on('data', data => { stdout += data.toString(); });
+    child.stderr.on('data', data => { stderr += data.toString(); });
+    child.on('error', error => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.on('close', code => {
+      clearTimeout(timer);
+      if (code === 0) resolve({ stdout, stderr });
+      else reject(Object.assign(new Error(stderr.trim() || `${command} exited with code ${code}`), { code, stdout, stderr }));
+    });
+  });
+}
+
+function guardianModeAvailable() {
+  return process.platform === 'darwin' && fs.existsSync(GUARDIAN_APP_PATH);
+}
+
+async function readGuardianDefault(key, fallback = '') {
+  if (process.platform !== 'darwin') return fallback;
+  try {
+    const { stdout } = await runGuardianCommand('/usr/bin/defaults', ['read', GUARDIAN_APP_BUNDLE_ID, key], 2500);
+    return String(stdout || '').trim();
+  } catch {
+    return fallback;
+  }
+}
+
+async function writeGuardianDefault(key, type, value) {
+  await runGuardianCommand('/usr/bin/defaults', ['write', GUARDIAN_APP_BUNDLE_ID, key, type, String(value)], 3000);
+}
+
+async function openGuardianAppInBackground() {
+  if (!guardianModeAvailable()) return;
+  try {
+    await runGuardianCommand('/usr/bin/open', ['-gj', '-b', GUARDIAN_APP_BUNDLE_ID], 4000);
+  } catch {
+    await runGuardianCommand('/usr/bin/open', ['-gj', GUARDIAN_APP_PATH], 4000).catch(() => {});
+  }
+}
+
+async function guardianModeStatus() {
+  const available = guardianModeAvailable();
+  const enabledRaw = await readGuardianDefault(GUARDIAN_AUTO_ENABLED_KEY, '0');
+  const idleRaw = await readGuardianDefault(GUARDIAN_IDLE_MINUTES_KEY, String(GUARDIAN_DEFAULT_IDLE_MINUTES));
+  const idleMinutes = clampGuardianIdleMinutes(idleRaw);
+  return {
+    available,
+    enabled: /^(1|true|yes)$/i.test(enabledRaw),
+    idleMinutes,
+    timeoutMs: idleMinutes * 60 * 1000,
+    appBundleId: GUARDIAN_APP_BUNDLE_ID,
+    appPath: GUARDIAN_APP_PATH,
+  };
+}
+
+async function updateGuardianModeSettings(payload = {}) {
+  if (!guardianModeAvailable()) {
+    const error = new Error('这台 Mac 没有找到 Codex Mini App，无法配置守护模式。');
+    error.code = 'GUARDIAN_MODE_UNAVAILABLE';
+    throw error;
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'idleMinutes') || Object.prototype.hasOwnProperty.call(payload, 'timeoutMs')) {
+    const minutes = Object.prototype.hasOwnProperty.call(payload, 'idleMinutes')
+      ? payload.idleMinutes
+      : Number(payload.timeoutMs) / 60000;
+    await writeGuardianDefault(GUARDIAN_IDLE_MINUTES_KEY, '-int', clampGuardianIdleMinutes(minutes));
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'enabled')) {
+    await writeGuardianDefault(GUARDIAN_AUTO_ENABLED_KEY, '-bool', payload.enabled === true ? 'true' : 'false');
+  }
+  await openGuardianAppInBackground();
+  return guardianModeStatus();
 }
 
 function readCodexConfigText() {
@@ -2770,7 +2867,7 @@ function getLanApiBases() {
   return [...bases];
 }
 
-function handleClientConfig(req, res) {
+async function handleClientConfig(req, res) {
   if (!isAuthorized(req)) return json(res, 401, { ok: false, code: 'UNAUTHORIZED', message: '访问令牌不正确。' });
   return json(res, 200, {
     ok: true,
@@ -2779,6 +2876,7 @@ function handleClientConfig(req, res) {
     localOnly: true,
     localApiBases: getLanApiBases(),
     modelOptions: readModelCatalogOptions(),
+    guardianMode: await guardianModeStatus(),
   });
 }
 
@@ -2822,6 +2920,35 @@ async function handleKeepAwake(req, res) {
   }
 }
 
+async function handleGuardianMode(req, res) {
+  if (!isAuthorized(req)) return json(res, 401, { ok: false, code: 'UNAUTHORIZED', message: '访问令牌不正确。' });
+  if (req.method === 'GET') {
+    return json(res, 200, { ok: true, ...(await guardianModeStatus()) });
+  }
+
+  let payload = {};
+  try {
+    payload = JSON.parse(await readBody(req) || '{}');
+  } catch (error) {
+    return json(res, 400, { ok: false, code: 'BAD_REQUEST', message: error.message || '请求格式不正确。' });
+  }
+
+  try {
+    const status = await updateGuardianModeSettings(payload);
+    return json(res, 200, {
+      ok: true,
+      ...status,
+      message: status.enabled ? '已开启守护模式自动保护。' : '已关闭守护模式自动保护。',
+    });
+  } catch (error) {
+    return json(res, 500, {
+      ok: false,
+      code: error.code || 'GUARDIAN_MODE_FAILED',
+      message: error.message || '更新守护模式失败。',
+    });
+  }
+}
+
 function getLanUrls() {
   const nets = os.networkInterfaces();
   const urls = new Set([`http://localhost:${PORT}/?token=${TOKEN}`]);
@@ -2843,6 +2970,7 @@ const server = http.createServer((req, res) => {
   if (req.method === 'GET' && req.url.startsWith('/codex/threads')) return handleThreads(req, res);
   if (req.method === 'GET' && req.url.startsWith('/codex/history')) return handleThreadHistory(req, res);
   if (req.method === 'GET' && req.url.startsWith('/codex/status')) return handleCodexStatus(req, res);
+  if ((req.method === 'GET' || req.method === 'POST') && req.url.startsWith('/codex/guardian-mode')) return handleGuardianMode(req, res);
   if ((req.method === 'GET' || req.method === 'POST') && req.url.startsWith('/codex/keep-awake')) return handleKeepAwake(req, res);
   if (req.method === 'POST' && req.url.startsWith('/codex/select')) return handleSelectThread(req, res);
   if (req.method === 'POST' && req.url.startsWith('/codex/new-thread')) return handleNewCodexThread(req, res);

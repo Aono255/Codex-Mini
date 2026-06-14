@@ -118,7 +118,6 @@
       grid-template-rows: auto minmax(0, 1fr) auto;
       background: var(--bg);
     }
-
     .topbar {
       position: relative;
       z-index: 80;
@@ -970,6 +969,45 @@
       box-shadow: 0 0 0 3px rgba(94,180,255,.12);
     }
     .settings-input::placeholder { color: var(--faint); }
+    .settings-action {
+      height: 34px;
+      min-width: 78px;
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 999px;
+      background: rgba(255,255,255,.075);
+      color: var(--text);
+      padding: 0 13px;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 780;
+      cursor: pointer;
+      touch-action: manipulation;
+      white-space: nowrap;
+    }
+    .settings-action:active:not(:disabled) {
+      transform: scale(.96);
+      background: rgba(255,255,255,.12);
+    }
+    .settings-action:disabled {
+      opacity: .58;
+      cursor: wait;
+    }
+    .settings-select {
+      height: 34px;
+      min-width: 82px;
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 999px;
+      background: rgba(0,0,0,.24);
+      color: var(--text);
+      padding: 0 28px 0 12px;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 760;
+      outline: none;
+      appearance: none;
+      -webkit-appearance: none;
+      cursor: pointer;
+    }
     .top-control-settings-list {
       display: grid;
       gap: 8px;
@@ -2655,6 +2693,21 @@
             <div class="settings-row-text"><div class="settings-label">显示屏常亮</div></div>
             <button class="settings-switch" id="keep-awake" type="button" role="switch" aria-label="显示屏常亮"></button>
           </div>
+          <div class="settings-row" id="setting-guardian-mode-row" hidden>
+            <div class="settings-row-text"><div class="settings-label">守护模式自动保护</div><div class="settings-subtitle" id="guardian-mode-status">未开启</div></div>
+            <button class="settings-switch" id="guardian-mode" type="button" role="switch" aria-label="守护模式自动保护"></button>
+          </div>
+          <div class="settings-row" id="setting-guardian-mode-timeout-row" hidden>
+            <div class="settings-row-text"><div class="settings-label">守护等待</div></div>
+            <select class="settings-select" id="guardian-mode-timeout" aria-label="守护等待">
+              <option value="1">1 分钟</option>
+              <option value="3">3 分钟</option>
+              <option value="5">5 分钟</option>
+              <option value="10">10 分钟</option>
+              <option value="15">15 分钟</option>
+              <option value="30">30 分钟</option>
+            </select>
+          </div>
         </div>
       </div>
       <div class="approval-sheet" id="approval-sheet" aria-label="Codex 审批同步">
@@ -2774,6 +2827,11 @@
     const settingSignatureText = document.getElementById('setting-signature-text');
     const topControlSettingsList = document.getElementById('top-control-settings-list');
     const keepAwakeButton = document.getElementById('keep-awake');
+    const settingGuardianModeRow = document.getElementById('setting-guardian-mode-row');
+    const settingGuardianModeTimeoutRow = document.getElementById('setting-guardian-mode-timeout-row');
+    const guardianModeButton = document.getElementById('guardian-mode');
+    const guardianModeTimeoutSelect = document.getElementById('guardian-mode-timeout');
+    const guardianModeStatus = document.getElementById('guardian-mode-status');
     const threadCurrentPin = document.getElementById('thread-current-pin');
     const threadNameEl = document.getElementById('thread-name');
     const threadMenuScrim = document.getElementById('thread-menu-scrim');
@@ -2874,6 +2932,11 @@
     const RELAY_PREWARM_TIMEOUT_MS = 2500;
     let keepAwakeEnabled = false;
     let keepAwakeBusy = false;
+    let keepAwakeAvailable = false;
+    let guardianModeAvailable = false;
+    let guardianModeEnabled = false;
+    let guardianModeIdleMinutes = 5;
+    let guardianModeBusy = false;
     let actionThreadId = '';
     let threadLongPressTimer = null;
     let threadLongPressStart = null;
@@ -4648,9 +4711,10 @@
 
     function renderKeepAwakeButton() {
       if (!keepAwakeButton) return;
-      if (settingKeepAwakeRow) settingKeepAwakeRow.hidden = !betaMode;
-      if (settingDeviceNav) settingDeviceNav.hidden = !betaMode;
-      keepAwakeButton.disabled = !betaMode || keepAwakeBusy;
+      const showDeviceNav = keepAwakeAvailable || guardianModeAvailable;
+      if (settingKeepAwakeRow) settingKeepAwakeRow.hidden = !keepAwakeAvailable;
+      if (settingDeviceNav) settingDeviceNav.hidden = !showDeviceNav;
+      keepAwakeButton.disabled = !keepAwakeAvailable || keepAwakeBusy;
       keepAwakeButton.classList.toggle('is-on', Boolean(keepAwakeEnabled));
       keepAwakeButton.classList.toggle('is-busy', Boolean(keepAwakeBusy));
       keepAwakeButton.setAttribute('aria-checked', keepAwakeEnabled ? 'true' : 'false');
@@ -4660,21 +4724,25 @@
     }
 
     async function refreshKeepAwakeStatus() {
-      if (!betaMode || !keepAwakeButton) return;
+      if (!keepAwakeButton) return;
       try {
         const params = new URLSearchParams({ token });
         const response = await fetchApi(`/codex/keep-awake?${params}`, { cache: 'no-store', apiTimeoutMs: 8000, routeSwitchQuiet: true });
         const data = await response.json().catch(() => ({}));
         if (!response.ok || !data.ok) throw new Error(data.message || '读取保持亮屏状态失败');
+        keepAwakeAvailable = true;
         keepAwakeEnabled = Boolean(data.enabled);
         renderKeepAwakeButton();
       } catch (error) {
+        keepAwakeAvailable = false;
+        keepAwakeEnabled = false;
+        renderKeepAwakeButton();
         console.warn('Codex mini keep-awake status skipped:', error);
       }
     }
 
     async function toggleKeepAwake() {
-      if (!betaMode || keepAwakeBusy) return;
+      if (!keepAwakeAvailable || keepAwakeBusy) return;
       keepAwakeBusy = true;
       renderKeepAwakeButton();
       const nextEnabled = !keepAwakeEnabled;
@@ -4696,6 +4764,96 @@
         keepAwakeBusy = false;
         renderKeepAwakeButton();
       }
+    }
+
+    function guardianModeTimeoutMinutes() {
+      return Math.max(1, Math.round(Number(guardianModeIdleMinutes) || 5));
+    }
+
+    function renderGuardianMode() {
+      const showDeviceNav = keepAwakeAvailable || guardianModeAvailable;
+      if (settingDeviceNav) settingDeviceNav.hidden = !showDeviceNav;
+      if (settingGuardianModeRow) settingGuardianModeRow.hidden = !guardianModeAvailable;
+      if (settingGuardianModeTimeoutRow) settingGuardianModeTimeoutRow.hidden = !guardianModeAvailable;
+      if (guardianModeButton) {
+        guardianModeButton.disabled = !guardianModeAvailable || guardianModeBusy;
+        guardianModeButton.classList.toggle('is-on', Boolean(guardianModeEnabled));
+        guardianModeButton.setAttribute('aria-checked', guardianModeEnabled ? 'true' : 'false');
+      }
+      if (guardianModeTimeoutSelect) {
+        guardianModeTimeoutSelect.disabled = !guardianModeAvailable || guardianModeBusy;
+        const minutes = guardianModeTimeoutMinutes();
+        const existing = [...guardianModeTimeoutSelect.options].some(option => Number(option.value) === minutes);
+        if (!existing) {
+          const option = new Option(`${minutes} 分钟`, String(minutes));
+          guardianModeTimeoutSelect.add(option);
+        }
+        guardianModeTimeoutSelect.value = String(minutes);
+      }
+      if (guardianModeStatus) {
+        if (!guardianModeAvailable) guardianModeStatus.textContent = '这台设备暂不可用';
+        else if (guardianModeEnabled) guardianModeStatus.textContent = `${guardianModeTimeoutMinutes()} 分钟空闲后开启`;
+        else guardianModeStatus.textContent = '未开启';
+      }
+    }
+
+    function applyGuardianModeStatus(data = {}) {
+      guardianModeAvailable = Boolean(data.available !== false);
+      guardianModeEnabled = Boolean(data.enabled);
+      const idleMinutes = Number(data.idleMinutes || (Number(data.timeoutMs) / 60000));
+      if (Number.isFinite(idleMinutes) && idleMinutes > 0) guardianModeIdleMinutes = idleMinutes;
+      renderGuardianMode();
+    }
+
+    async function refreshGuardianModeStatus() {
+      if (!guardianModeButton) return;
+      try {
+        const params = new URLSearchParams({ token });
+        const response = await fetchApi(`/codex/guardian-mode?${params}`, { cache: 'no-store', apiTimeoutMs: 8000, routeSwitchQuiet: true });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.ok) throw new Error(data.message || '读取守护模式状态失败');
+        applyGuardianModeStatus(data);
+      } catch (error) {
+        guardianModeAvailable = false;
+        guardianModeEnabled = false;
+        renderGuardianMode();
+        console.warn('Codex mini guardian-mode status skipped:', error);
+      }
+    }
+
+    async function updateGuardianMode(patch = {}) {
+      if (!guardianModeAvailable || guardianModeBusy) return;
+      guardianModeBusy = true;
+      renderGuardianMode();
+      try {
+        const response = await fetchApi('/codex/guardian-mode', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-mobile-typer-token': token },
+          body: JSON.stringify(patch),
+          apiTimeoutMs: 10000,
+          routeSwitchQuiet: true,
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.ok) throw new Error(data.message || '更新守护模式失败');
+        applyGuardianModeStatus(data);
+        if (data.message) setNotice(data.message, 'ok');
+      } catch (error) {
+        setNotice(error.message || '更新守护模式失败', 'error');
+      } finally {
+        guardianModeBusy = false;
+        renderGuardianMode();
+      }
+    }
+
+    function toggleGuardianMode() {
+      updateGuardianMode({ enabled: !guardianModeEnabled, idleMinutes: guardianModeIdleMinutes });
+    }
+
+    function updateGuardianModeTimeout() {
+      const minutes = Number(guardianModeTimeoutSelect?.value || guardianModeTimeoutMinutes());
+      guardianModeIdleMinutes = Math.max(1, minutes);
+      renderGuardianMode();
+      updateGuardianMode({ enabled: guardianModeEnabled, idleMinutes: guardianModeIdleMinutes });
     }
     async function ensureRouteForSend() {
       if (localOnlyMode || isAdminRelayMode) return;
@@ -4790,9 +4948,11 @@
       keyboardShiftTarget = 0;
       const viewportHeight = Math.round((window.visualViewport && window.visualViewport.height) || 0);
       const baselineHeight = Math.round(Math.max(window.innerHeight || 0, document.documentElement.clientHeight || 0, viewportHeight || 0));
-      if (baselineHeight) maxViewportHeight = baselineHeight;
+      if (baselineHeight && (!maxViewportHeight || baselineHeight > maxViewportHeight || Math.abs(baselineHeight - maxViewportHeight) <= 64)) {
+        maxViewportHeight = baselineHeight;
+      }
       document.documentElement.style.setProperty('--app-top', '0px');
-      document.documentElement.style.setProperty('--app-height', `${maxViewportHeight || baselineHeight}px`);
+      document.documentElement.style.setProperty('--app-height', `${Math.max(maxViewportHeight || 0, baselineHeight || 0)}px`);
       document.documentElement.style.setProperty('--keyboard-shift', '0px');
       keepLayoutViewportPinned();
     }
@@ -4801,6 +4961,16 @@
       const viewport = window.visualViewport;
       if (!viewport) return window.innerHeight || document.documentElement.clientHeight || 0;
       return Math.round((viewport.offsetTop || 0) + (viewport.height || 0));
+    }
+
+    function visibleViewportBottomForComposer() {
+      const viewport = window.visualViewport;
+      const stableHeight = stableViewportHeight();
+      const viewportHeight = viewport?.height || 0;
+      if (viewport && viewportHeight > 0 && stableHeight - viewportHeight > 80) {
+        return visualViewportBottom();
+      }
+      return fallbackKeyboardViewportBottom();
     }
 
     function fallbackKeyboardViewportBottom() {
@@ -4819,7 +4989,7 @@
     function forceComposerAboveViewport() {
       if (!composer) return false;
       const currentShift = currentKeyboardShift();
-      const viewportBottom = fallbackKeyboardViewportBottom();
+      const viewportBottom = visibleViewportBottomForComposer();
       if (!viewportBottom) return false;
       const desiredGapRaw = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--keyboard-composer-gap'));
       const desiredGap = Number.isFinite(desiredGapRaw) ? desiredGapRaw : 8;
@@ -4932,14 +5102,8 @@
       const desiredGap = Number.isFinite(desiredGapRaw) ? desiredGapRaw : 0;
       const maxReasonableShift = Math.max(220, stableHeight * 0.72);
       const maxShift = Math.max(0, Math.min(viewportShrink + 24, maxReasonableShift));
-      const viewportBottom = isChromeKeyboardBrowser && viewport
-        ? Math.round((viewport.offsetTop || 0) + viewportHeight)
-        : viewportHeight;
-      const measuredShift = clampNumber(composerBottomWithoutShift - viewportBottom + desiredGap, 0, maxShift);
-      const shiftTrimRaw = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--keyboard-shift-trim'));
-      const shiftTrim = Number.isFinite(shiftTrimRaw) ? shiftTrimRaw : 36;
-      const adjustedShift = clampNumber(measuredShift - shiftTrim, 0, maxShift);
-      const nextShift = adjustedShift;
+      const viewportBottom = visibleViewportBottomForComposer();
+      const nextShift = clampNumber(composerBottomWithoutShift - viewportBottom + desiredGap, 0, maxShift);
       keyboardShiftTarget = Math.round(nextShift);
       document.documentElement.style.setProperty('--keyboard-shift', `${keyboardShiftTarget}px`);
       forceComposerAboveViewport();
@@ -8193,6 +8357,12 @@
       closeSettingsCard();
       toggleKeepAwake();
     });
+    guardianModeButton.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleGuardianMode();
+    });
+    guardianModeTimeoutSelect.addEventListener('change', updateGuardianModeTimeout);
     routeBadge.addEventListener('click', event => {
       event.preventDefault();
       event.stopPropagation();
@@ -8341,6 +8511,7 @@
       .then(() => loadThreads())
       .then(async () => {
         await refreshKeepAwakeStatus();
+        await refreshGuardianModeStatus();
         await loadThreadHistory(selectedThreadId);
         startAutoRefresh();
         startGuiStateWatcher();
