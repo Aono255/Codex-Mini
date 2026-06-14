@@ -4,6 +4,10 @@ logs/
 dist/
 output/
 node_modules/
+android-webview/.gradle/
+android-webview/build/
+android-webview/local.properties
+android-webview/app/build/
 macos/CodexMini/DerivedData/
 macos/CodexMini/*.xcresult
 tmp-*
