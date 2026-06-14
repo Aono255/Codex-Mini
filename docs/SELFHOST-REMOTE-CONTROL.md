@@ -25,11 +25,17 @@ Each device has two secrets:
 - `codexToken`: local Codex Mini token used between the browser UI and the Mac
   service.
 
-The user only types `relayToken` on `/login`. After a successful login, the
-relay stores an HttpOnly cookie scoped to `/u/<user>/<device>/`. The browser
-only keeps a harmless session marker; the relay injects the device's
-`codexToken` when forwarding requests to the Mac. Different users/devices do
-not share browser state because the Codex Mini UI scopes local storage by path.
+The user types only `user` and `relayToken` on `/login`, then chooses a device
+from the device picker. After device selection, the relay stores HttpOnly
+cookies for the user session and selected device. The browser only keeps a
+harmless session marker; the relay injects the device's `codexToken` when
+forwarding requests to the Mac. Different users/devices do not share browser
+state because the Codex Mini UI scopes local storage by path.
+
+If one user should choose between multiple devices after login, give those
+devices the same `relayToken`. You can also define a top-level `users` array
+with a user-level `relayToken`; that token can access every configured device
+for the same user.
 
 Generate URL-safe tokens with:
 
@@ -131,9 +137,10 @@ scripts/selfhost/start-codex-mini-selfhost.sh
 ## User flow
 
 1. Open `https://relay.example.com/login`.
-2. Enter the assigned user, device, and relay token.
-3. The relay redirects to `/u/<user>/<device>/`.
-4. The Codex Mini UI controls the user's own Mac through the SSH tunnel.
+2. Enter the assigned user and relay token.
+3. Choose a device from the device picker.
+4. The relay redirects to `/u/<user>/<device>/`.
+5. The Codex Mini UI controls the user's own Mac through the SSH tunnel.
 
 If the phone can open the device page but cannot list messages, check that the
 Mac is online, the tunnel LaunchAgent is running, and Codex Desktop is running

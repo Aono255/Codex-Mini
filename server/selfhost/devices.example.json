@@ -1,4 +1,16 @@
 {
+  "users": [
+    {
+      "user": "aono",
+      "displayName": "Aono",
+      "relayToken": "replace-with-a-random-login-token-for-aono"
+    },
+    {
+      "user": "bill",
+      "displayName": "Bill",
+      "relayToken": "replace-with-a-random-login-token-for-bill"
+    }
+  ],
   "devices": [
     {
       "user": "aono",
