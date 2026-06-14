@@ -1,105 +1,140 @@
 # Self-hosted remote control
 
-This setup keeps Codex Mini's control path on your own infrastructure:
+This setup keeps Codex Mini's remote-control path on infrastructure you operate:
 
 ```text
-phone browser -> your HTTPS/HTTP reverse proxy -> SSH reverse tunnel -> Mac localhost Codex Mini -> Codex Desktop
+phone browser -> public relay server -> SSH reverse tunnel -> Mac localhost Codex Mini -> Codex Desktop
 ```
 
-It does not require the Codex Mini official relay. Each Mac still needs a local
-Codex Desktop session and a local Codex Mini service.
+It does not use the Codex Mini official Pro relay. Each user still runs Codex
+Desktop and Codex Mini locally on their own Mac.
 
-## Mac requirements
+## Multi-user model
 
-- Install and sign in to `Codex.app`.
-- Install `Codex Mini.app` so the bundled Node runtime, `server.js`, and CDP
-  launcher exist under `~/Library/Application Support/Codex Mini`.
-- Run Codex with CDP enabled on `127.0.0.1:39252`.
-- Run a selfhost Codex Mini LaunchAgent bound to `127.0.0.1`.
-- Run an SSH reverse tunnel from the Mac to the public server.
+The shared relay server exposes one login page and one path per user/device:
 
-Use `scripts/selfhost/start-codex-mini-selfhost.sh` to repair and verify the
-local stack.
+```text
+https://relay.example.com/login
+https://relay.example.com/u/aono/mac-mini/
+https://relay.example.com/u/bill/macbook/
+```
 
-Required environment:
+Each device has two secrets:
+
+- `relayToken`: login token for the public relay page.
+- `codexToken`: local Codex Mini token used between the browser UI and the Mac
+  service.
+
+The user only types `relayToken` on `/login`. After a successful login, the
+relay stores an HttpOnly cookie scoped to `/u/<user>/<device>/`. The browser
+only keeps a harmless session marker; the relay injects the device's
+`codexToken` when forwarding requests to the Mac. Different users/devices do
+not share browser state because the Codex Mini UI scopes local storage by path.
+
+Generate URL-safe tokens with:
 
 ```bash
-export SELFHOST_TOKEN="<per-device-token>"
-export PUBLIC_BASE="http://example.com/codex-mini-beta/aono"
-export BASIC_AUTH_USER="<optional-basic-auth-user>"
-export BASIC_AUTH_PASSWORD="<optional-basic-auth-password>"
-scripts/selfhost/start-codex-mini-selfhost.sh
+openssl rand -base64 32 | tr '+/' '-_' | tr -d '='
 ```
 
-The selfhost service should use these environment settings:
+## Server setup
+
+Copy the repo to the relay server, for example `/opt/codex-mini`, then create
+`/etc/codex-mini/devices.json` from
+`server/selfhost/devices.example.json`:
+
+```json
+{
+  "devices": [
+    {
+      "user": "aono",
+      "device": "mac-mini",
+      "relayToken": "random-login-token-for-aono",
+      "codexToken": "random-local-codex-mini-token-for-aono",
+      "upstream": { "host": "127.0.0.1", "port": 18787, "protocol": "http:" }
+    },
+    {
+      "user": "bill",
+      "device": "macbook",
+      "relayToken": "random-login-token-for-bill",
+      "codexToken": "random-local-codex-mini-token-for-bill",
+      "upstream": { "host": "127.0.0.1", "port": 18788, "protocol": "http:" }
+    }
+  ]
+}
+```
+
+Run the relay:
+
+```bash
+HOST=127.0.0.1 \
+PORT=18700 \
+CODEX_MINI_RELAY_CONFIG=/etc/codex-mini/devices.json \
+node /opt/codex-mini/server/selfhost/multi-user-relay.js
+```
+
+For systemd, use `server/selfhost/codex-mini-relay.service`. Put Nginx in front
+with `server/selfhost/nginx-codex-mini-relay.conf`. Use HTTPS for real users.
+
+## Mac setup
+
+Each Mac needs:
+
+- `Codex.app` installed and signed in.
+- `Codex Mini.app` installed and opened once, so the bundled Node runtime,
+  `server.js`, and CDP launcher exist under
+  `~/Library/Application Support/Codex Mini`.
+- An SSH key that can connect to the relay server.
+- A unique remote tunnel port reserved in `devices.json`.
+
+Install per-device LaunchAgents:
+
+```bash
+scripts/selfhost/install-device-launchagents.sh \
+  --user bill \
+  --device macbook \
+  --server relay.example.com \
+  --remote-port 18788 \
+  --codex-token random-local-codex-mini-token-for-bill \
+  --ssh-key ~/.ssh/codex_mini_relay
+```
+
+This creates:
+
+```text
+codex-mini.bill-macbook.selfhost -> 127.0.0.1:8789 on Bill's Mac
+codex-mini.bill-macbook.tunnel   -> 127.0.0.1:18788 on the relay server
+```
+
+The local service uses:
 
 ```text
 HOST=127.0.0.1
 PORT=8789
-MOBILE_TYPER_TOKEN=<per-device-token>
-CODEX_MINI_BETA=0
+MOBILE_TYPER_TOKEN=<codexToken>
 CODEX_MINI_LOCAL_ONLY=1
-CODEX_MINI_RELAY_BASES=
-CODEX_MINI_BETA_RELAY_BASE=
-CODEX_MINI_LICENSE_API_BASE=
 CODEX_MINI_HIDE_LAN_BASES=1
 CODEX_MINI_CDP_HOST=[::1]
 CODEX_MINI_CDP_PORT=39252
 ```
 
-`CODEX_MINI_HIDE_LAN_BASES=1` prevents the phone UI from auto-switching to a
-private LAN address that is unreachable outside the Mac's network.
+Use `scripts/selfhost/start-codex-mini-selfhost.sh` to repair and verify a Mac
+stack after reboot:
 
-## Shared server layout
-
-Multiple users can share one public server if each user/device gets isolated
-credentials and a separate local upstream port:
-
-```text
-/codex-mini-beta/aono -> 127.0.0.1:18787 -> Aono's Mac 127.0.0.1:8789
-/codex-mini-beta/bill -> 127.0.0.1:18788 -> Bill's Mac 127.0.0.1:8789
+```bash
+export SELFHOST_TOKEN="<codexToken>"
+export RELAY_TOKEN="<relayToken>"
+export PUBLIC_BASE="https://relay.example.com/u/bill/macbook"
+scripts/selfhost/start-codex-mini-selfhost.sh
 ```
 
-The browser URL for each device is:
+## User flow
 
-```text
-http://server.example/codex-mini-beta/<device-id>/?token=<device-token>
-```
+1. Open `https://relay.example.com/login`.
+2. Enter the assigned user, device, and relay token.
+3. The relay redirects to `/u/<user>/<device>/`.
+4. The Codex Mini UI controls the user's own Mac through the SSH tunnel.
 
-Subdomains are also fine, but path routing with `/codex-mini-beta/<device-id>`
-matches the existing Codex Mini frontend base-path detection and avoids patching
-the UI.
-
-## Nginx example
-
-```nginx
-map $uri $codex_mini_upstream {
-    default "";
-    ~^/codex-mini-beta/aono(?:/|$) http://127.0.0.1:18787;
-    ~^/codex-mini-beta/bill(?:/|$) http://127.0.0.1:18788;
-}
-
-server {
-    listen 80;
-    server_name _;
-
-    auth_basic "Codex Mini";
-    auth_basic_user_file /etc/nginx/.codex-mini.htpasswd;
-
-    client_max_body_size 512m;
-
-    location ~ ^/codex-mini-beta/[^/]+(?:/.*)?$ {
-        if ($codex_mini_upstream = "") { return 404; }
-        proxy_pass $codex_mini_upstream;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 300s;
-        proxy_send_timeout 300s;
-    }
-}
-```
-
-For production use, put HTTPS in front of this server.
+If the phone can open the device page but cannot list messages, check that the
+Mac is online, the tunnel LaunchAgent is running, and Codex Desktop is running
+with CDP on port `39252`.

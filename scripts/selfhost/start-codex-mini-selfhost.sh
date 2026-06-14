@@ -14,7 +14,8 @@ CDP_LAUNCHER="${CDP_LAUNCHER:-${HOME}/Library/Application Support/Codex Mini/bin
 CDP_PORT="${CDP_PORT:-39252}"
 SELFHOST_PORT="${SELFHOST_PORT:-8789}"
 SELFHOST_TOKEN="${SELFHOST_TOKEN:?Set SELFHOST_TOKEN to the Codex Mini token for this device}"
-PUBLIC_BASE="${PUBLIC_BASE:?Set PUBLIC_BASE to the public URL for this device, for example http://example.com/codex-mini-beta/aono}"
+PUBLIC_BASE="${PUBLIC_BASE:?Set PUBLIC_BASE to the public URL for this device, for example https://example.com/u/aono/mac-mini}"
+RELAY_TOKEN="${RELAY_TOKEN:-}"
 BASIC_AUTH_USER="${BASIC_AUTH_USER:-}"
 BASIC_AUTH_PASSWORD="${BASIC_AUTH_PASSWORD:-}"
 
@@ -138,6 +139,9 @@ check_selfhost() {
 check_public() {
   local body
   local curl_args=(-fsS --max-time 8)
+  if [[ -n "$RELAY_TOKEN" ]]; then
+    curl_args+=(-H "x-codex-mini-relay-token: ${RELAY_TOKEN}")
+  fi
   if [[ -n "$BASIC_AUTH_USER" || -n "$BASIC_AUTH_PASSWORD" ]]; then
     curl_args+=(-u "${BASIC_AUTH_USER}:${BASIC_AUTH_PASSWORD}")
   fi

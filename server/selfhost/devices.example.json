@@ -1,0 +1,28 @@
+{
+  "devices": [
+    {
+      "user": "aono",
+      "device": "mac-mini",
+      "displayName": "Aono Mac mini",
+      "relayToken": "replace-with-a-random-login-token-for-aono",
+      "codexToken": "replace-with-a-random-local-codex-mini-token-for-aono",
+      "upstream": {
+        "host": "127.0.0.1",
+        "port": 18787,
+        "protocol": "http:"
+      }
+    },
+    {
+      "user": "bill",
+      "device": "macbook",
+      "displayName": "Bill MacBook",
+      "relayToken": "replace-with-a-random-login-token-for-bill",
+      "codexToken": "replace-with-a-random-local-codex-mini-token-for-bill",
+      "upstream": {
+        "host": "127.0.0.1",
+        "port": 18788,
+        "protocol": "http:"
+      }
+    }
+  ]
+}

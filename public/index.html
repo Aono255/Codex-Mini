@@ -1692,16 +1692,23 @@
     const threadRenameInput = document.getElementById('thread-rename-input');
     const threadRenameCancel = document.getElementById('thread-rename-cancel');
     const threadRenameSave = document.getElementById('thread-rename-save');
-    const queryToken = new URLSearchParams(location.search).get('token') || '';
-    if (queryToken) localStorage.setItem('codexMini.token', queryToken);
-    const token = queryToken || localStorage.getItem('codexMini.token') || '';
     function detectBasePath(pathname) {
       if (pathname === '/codex-mini' || pathname.startsWith('/codex-mini/')) return '/codex-mini';
+      const relayMatch = pathname.match(/^\/u\/[^/]+\/[^/]+(?:\/|$)/);
+      if (relayMatch) return relayMatch[0].replace(/\/$/, '');
+      const betaRelayMatch = pathname.match(/^\/codex-mini-beta\/[^/]+(?:\/|$)/);
+      if (betaRelayMatch) return betaRelayMatch[0].replace(/\/$/, '');
       return '';
     }
     const basePath = detectBasePath(location.pathname);
-    const ROUTE_STORAGE_KEY = 'codexMini.apiRoutes.v1';
-    const CONTEXT_DISPLAY_MODE_STORAGE_KEY = 'codexMini.contextDisplayMode.v1';
+    const scopedStorageKey = key => basePath ? `${key}:${basePath}` : key;
+    const TOKEN_STORAGE_KEY = scopedStorageKey('codexMini.token');
+    const SELECTED_THREAD_STORAGE_KEY = scopedStorageKey('codexMini.selectedThread');
+    const queryToken = new URLSearchParams(location.search).get('token') || '';
+    if (queryToken) localStorage.setItem(TOKEN_STORAGE_KEY, queryToken);
+    const token = queryToken || localStorage.getItem(TOKEN_STORAGE_KEY) || '';
+    const ROUTE_STORAGE_KEY = scopedStorageKey('codexMini.apiRoutes.v1');
+    const CONTEXT_DISPLAY_MODE_STORAGE_KEY = scopedStorageKey('codexMini.contextDisplayMode.v1');
     const normalizeBaseUrl = value => String(value || '').trim().replace(/\/+$/, '');
     const currentApiBase = normalizeBaseUrl(`${location.origin}${basePath}`);
     let apiCandidates = [];
@@ -1712,7 +1719,7 @@
     const target = 'codex';
     const CONTEXT_COMPACT_COMMAND = '/压缩';
 
-    let selectedThreadId = localStorage.getItem('codexMini.selectedThread') || '';
+    let selectedThreadId = localStorage.getItem(SELECTED_THREAD_STORAGE_KEY) || '';
     let pendingNewThread = null;
     let knownThreads = [];
     let pollTimer = null;
@@ -1776,12 +1783,12 @@
     let lastTextareaFocusPrepareAt = 0;
     let lastOutsideComposerTouchAt = 0;
     let suppressNextTextareaBlurRestore = false;
-    const STORAGE_PREFIX = 'codexMiniChat.v3';
-    const GROUPS_STORAGE_KEY = 'codexMini.threadGroups.open.v1';
-    const THREAD_NOTICE_STORAGE_KEY = 'codexMini.threadCompleteNotices.v1';
-    const REASONING_OVERRIDE_STORAGE_KEY = 'codexMini.reasoningOverrides.v1';
-    const MODEL_OVERRIDE_STORAGE_KEY = 'codexMini.modelOverrides.v1';
-    const ROUTE_BADGE_COMPACT_STORAGE_KEY = 'codexMini.routeBadgeCompact.v1';
+    const STORAGE_PREFIX = scopedStorageKey('codexMiniChat.v3');
+    const GROUPS_STORAGE_KEY = scopedStorageKey('codexMini.threadGroups.open.v1');
+    const THREAD_NOTICE_STORAGE_KEY = scopedStorageKey('codexMini.threadCompleteNotices.v1');
+    const REASONING_OVERRIDE_STORAGE_KEY = scopedStorageKey('codexMini.reasoningOverrides.v1');
+    const MODEL_OVERRIDE_STORAGE_KEY = scopedStorageKey('codexMini.modelOverrides.v1');
+    const ROUTE_BADGE_COMPACT_STORAGE_KEY = scopedStorageKey('codexMini.routeBadgeCompact.v1');
     const THREAD_NOTICE_MAX_AGE_MS = 30 * 60 * 1000;
     const THREAD_SPINNER_MS = 850;
     const LOCAL_STOP_SUPPRESS_MS = 2 * 60 * 1000;
@@ -3879,7 +3886,7 @@
       pruneCompletedThreadNotices();
       if (!pendingNewThread && (!selectedThreadId || !knownThreads.some(item => item.id === selectedThreadId))) {
         selectedThreadId = knownThreads[0]?.id || '';
-        if (selectedThreadId) localStorage.setItem('codexMini.selectedThread', selectedThreadId);
+        if (selectedThreadId) localStorage.setItem(SELECTED_THREAD_STORAGE_KEY, selectedThreadId);
       }
       setThreadCompleteNotice(selectedThreadId, false);
       updateThreadTitle();
@@ -4046,7 +4053,7 @@
           stopPolling();
           selectedThreadId = '';
           syncedThreadId = '';
-          localStorage.removeItem('codexMini.selectedThread');
+          localStorage.removeItem(SELECTED_THREAD_STORAGE_KEY);
           await loadThreads();
           const nextThreadId = data.nextThreadId || selectedThreadId || '';
           if (nextThreadId) {
@@ -4166,7 +4173,7 @@
         selectedThreadId = '';
         syncedThreadId = '';
         lastStatusSignature = '';
-        localStorage.removeItem('codexMini.selectedThread');
+        localStorage.removeItem(SELECTED_THREAD_STORAGE_KEY);
         clearThreadMessages();
         messageEl('assistant', '新线程已经在电脑 Codex 打开。直接在这里发第一条消息就会进入这个新线程。', { label: 'Codex mini' });
         updateThreadTitle();
@@ -4335,7 +4342,7 @@
       stopPolling();
       selectedThreadId = threadId;
       syncedThreadId = '';
-      localStorage.setItem('codexMini.selectedThread', selectedThreadId);
+      localStorage.setItem(SELECTED_THREAD_STORAGE_KEY, selectedThreadId);
       setThreadCompleteNotice(selectedThreadId, false);
       activeAssistant = null;
       renderReasoningBadge(bestReasoningMode(null, selectedThreadId));
@@ -4424,7 +4431,7 @@
       pendingNewThread = null;
       syncedThreadId = threadId;
       if (activeWatch) activeWatch.threadId = threadId;
-      localStorage.setItem('codexMini.selectedThread', threadId);
+      localStorage.setItem(SELECTED_THREAD_STORAGE_KEY, threadId);
       setThreadCompleteNotice(threadId, false);
       renderReasoningBadge(bestReasoningMode(null, threadId));
       renderModelBadge(bestModelInfo(null, threadId));
