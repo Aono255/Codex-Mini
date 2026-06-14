@@ -714,6 +714,52 @@ function normalizeComparableMessage(value) {
   return cleanUserHistoryText(value).replace(/\s+/g, ' ').trim();
 }
 
+function normalizeHistoryMessageFingerprint(value) {
+  const text = normalizeComparableMessage(value);
+  if (!text) return '';
+  return text.length > 300 ? text.slice(0, 300) : text;
+}
+
+function isSyntheticCodexUserMessage(text) {
+  const value = String(text || '').trim();
+  return (
+    !value ||
+    value.startsWith('<environment_context>') ||
+    value.startsWith('# AGENTS.md instructions') ||
+    value.startsWith('<turn_aborted>') ||
+    value.startsWith('<permissions instructions>') ||
+    value.startsWith('<collaboration_mode>') ||
+    value.startsWith('<skills_instructions>') ||
+    value.startsWith('<plugins_instructions>') ||
+    value.startsWith('Another language model started to solve this problem')
+  );
+}
+
+function collectUserEventMessageFingerprintsByTurn(lines = []) {
+  const fingerprintsByTurn = new Map();
+  let turnIndex = -1;
+  for (const line of lines) {
+    let item;
+    try { item = JSON.parse(line); } catch { continue; }
+    const payload = item.payload || {};
+    if (item.type === 'event_msg' && payload.type === 'task_started') {
+      turnIndex += 1;
+      if (!fingerprintsByTurn.has(turnIndex)) fingerprintsByTurn.set(turnIndex, new Set());
+      continue;
+    }
+    if (turnIndex < 0 || item.type !== 'event_msg' || payload.type !== 'user_message') continue;
+    const text = cleanUserHistoryText(payload.message);
+    const fingerprint = normalizeHistoryMessageFingerprint(text);
+    if (fingerprint) fingerprintsByTurn.get(turnIndex).add(fingerprint);
+  }
+  return fingerprintsByTurn;
+}
+
+function fingerprintsForTurn(fingerprintsByTurn, turnIndex) {
+  if (!fingerprintsByTurn.has(turnIndex)) fingerprintsByTurn.set(turnIndex, new Set());
+  return fingerprintsByTurn.get(turnIndex);
+}
+
 function findLatestCodexSessionFile(options = {}) {
   const excludeThreadId = isCodexThreadId(options.excludeThreadId) ? options.excludeThreadId : '';
   const afterMs = Number(options.afterMs) || 0;
@@ -1215,12 +1261,15 @@ function readTailLinesWithLimit(file, maxBytes) {
 function countCodexHistoryMessages(lines, maxNeeded = MAX_HISTORY_MESSAGES) {
   let count = 0;
   let currentTurn = null;
+  let turnIndex = -1;
+  const userEventFingerprintsByTurn = collectUserEventMessageFingerprintsByTurn(lines);
   const need = Math.max(1, Math.min(Number(maxNeeded) || MAX_HISTORY_MESSAGES, MAX_HISTORY_MESSAGES));
   for (const line of lines) {
     let item;
     try { item = JSON.parse(line); } catch { continue; }
     const payload = item.payload || {};
     if (item.type === 'event_msg' && payload.type === 'task_started') {
+      turnIndex += 1;
       currentTurn = { hasAssistant: false };
       continue;
     }
@@ -1228,6 +1277,11 @@ function countCodexHistoryMessages(lines, maxNeeded = MAX_HISTORY_MESSAGES) {
       const text = cleanUserHistoryText(payload.message);
       const attachments = extractUserAttachments(payload);
       if (text || attachments.length) count += 1;
+    } else if (item.type === 'response_item' && payload.type === 'message' && payload.role === 'user' && currentTurn) {
+      const text = cleanUserHistoryText(extractMessageText(payload.content));
+      const fingerprint = normalizeHistoryMessageFingerprint(text);
+      const userEventFingerprints = fingerprintsForTurn(userEventFingerprintsByTurn, turnIndex);
+      if (text && !isSyntheticCodexUserMessage(text) && fingerprint && !userEventFingerprints.has(fingerprint)) count += 1;
     } else if (item.type === 'response_item' && payload.type === 'message' && payload.role === 'assistant' && payload.phase === 'final_answer') {
       const text = normalizeHistoryText(extractMessageText(payload.content));
       if (text) {
@@ -1293,6 +1347,7 @@ function parseCodexThreadHistory(threadId, limit = MAX_HISTORY_MESSAGES) {
 
   const messages = [];
   let currentTurn = null;
+  let turnIndex = -1;
   function historyDurationText(startedAt = '', completedAt = '') {
     const startMs = Date.parse(startedAt || '');
     const endMs = Date.parse(completedAt || '');
@@ -1311,12 +1366,14 @@ function parseCodexThreadHistory(threadId, limit = MAX_HISTORY_MESSAGES) {
     return duration ? `Codex · 失败 ${duration}` : 'Codex';
   }
   const historyTail = readHistoryLinesAdaptive(file, limit);
+  const userEventFingerprintsByTurn = collectUserEventMessageFingerprintsByTurn(historyTail.lines);
   for (const line of historyTail.lines) {
     let item;
     try { item = JSON.parse(line); } catch { continue; }
     const payload = item.payload || {};
 
     if (item.type === 'event_msg' && payload.type === 'task_started') {
+      turnIndex += 1;
       currentTurn = { hasAssistant: false, assistantIndex: -1, failureText: '', startedAt: item.timestamp || '', turnId: payload.turn_id || '' };
       continue;
     }
@@ -1339,6 +1396,25 @@ function parseCodexThreadHistory(threadId, limit = MAX_HISTORY_MESSAGES) {
           text: text || (attachments.length ? ' ' : ''),
           attachments: attachments.map(filePath => ({ filePath, name: path.basename(filePath) })),
           timestamp: item.timestamp || '',
+        });
+      }
+      continue;
+    }
+
+    if (item.type === 'response_item' && payload.type === 'message' && payload.role === 'user') {
+      if (!currentTurn) continue;
+      const text = cleanUserHistoryText(extractMessageText(payload.content));
+      const fingerprint = normalizeHistoryMessageFingerprint(text);
+      const userEventFingerprints = fingerprintsForTurn(userEventFingerprintsByTurn, turnIndex);
+      if (text && !isSyntheticCodexUserMessage(text) && fingerprint && !userEventFingerprints.has(fingerprint)) {
+        userEventFingerprints.add(fingerprint);
+        messages.push({
+          role: 'user',
+          label: '你 · 引导',
+          text,
+          attachments: [],
+          timestamp: item.timestamp || '',
+          guidance: true,
         });
       }
       continue;
@@ -1845,6 +1921,16 @@ function parseCodexStatus(options = {}) {
   const seenThinking = new Set();
   const toolCallsById = new Map();
   const toolStepIndexById = new Map();
+  const turnUserEvents = [];
+  const guidanceMessages = [];
+  const userEventFingerprints = new Set();
+  for (const item of turnItems) {
+    const payload = item.payload || {};
+    if (item.type !== 'event_msg' || payload.type !== 'user_message') continue;
+    const text = cleanUserHistoryText(payload.message);
+    const fingerprint = normalizeHistoryMessageFingerprint(text);
+    if (fingerprint) userEventFingerprints.add(fingerprint);
+  }
 
   for (const item of turnItems) {
     const payload = item.payload || {};
@@ -1869,6 +1955,33 @@ function parseCodexStatus(options = {}) {
       completed = true;
       completedAt = item.timestamp || completedAt;
       turnId = payload.turn_id || turnId;
+    }
+
+    if (item.type === 'event_msg' && payload.type === 'user_message') {
+      const text = cleanUserHistoryText(payload.message);
+      const attachments = extractUserAttachments(payload);
+      if (text || attachments.length) {
+        turnUserEvents.push({
+          text,
+          attachments: attachments.map(filePath => ({ filePath, name: path.basename(filePath) })),
+          timestamp: item.timestamp || '',
+        });
+      }
+    }
+
+    if (item.type === 'response_item' && payload.type === 'message' && payload.role === 'user') {
+      const text = cleanUserHistoryText(extractMessageText(payload.content));
+      const fingerprint = normalizeHistoryMessageFingerprint(text);
+      if (text && !isSyntheticCodexUserMessage(text) && fingerprint && !userEventFingerprints.has(fingerprint)) {
+        userEventFingerprints.add(fingerprint);
+        guidanceMessages.push({
+          role: 'user',
+          label: '你 · 引导',
+          text,
+          timestamp: item.timestamp || '',
+          guidance: true,
+        });
+      }
     }
 
     if (item.type === 'response_item' && payload.type === 'function_call_output' && payload.call_id && toolStepIndexById.has(payload.call_id)) {
@@ -1915,6 +2028,7 @@ function parseCodexStatus(options = {}) {
   const startMs = Date.parse(startedAt || '') || sinceMs || 0;
   const endMs = completedAt ? Date.parse(completedAt) : Date.now();
   const durationMs = startMs ? Math.max(0, endMs - startMs) : 0;
+  const turnUser = turnUserEvents[turnUserEvents.length - 1] || null;
   return {
     ok: true,
     available: true,
@@ -1935,6 +2049,11 @@ function parseCodexStatus(options = {}) {
     final: final || '',
     error: finalFailureText,
     steps: statusSteps,
+    turnUserMessage: turnUser?.text || '',
+    turnUserAttachments: turnUser?.attachments || [],
+    turnUserMessageAt: turnUser?.timestamp || '',
+    turnUserLabel: turnUser?.attachments?.length ? `你 · ${turnUser.attachments.length} 个附件` : '你',
+    guidanceMessages,
   };
 }
 
@@ -2736,6 +2855,7 @@ async function handleSend(req, res) {
   const previousThreadId = isCodexThreadId(payload.previousThreadId) ? payload.previousThreadId : '';
   const expectedNewThreadCwd = validLocalDirectory(typeof payload.expectedCwd === 'string' ? payload.expectedCwd : '');
   const clientRequestId = normalizeClientRequestId(payload.clientRequestId);
+  const guidanceMode = payload.guidance === true || payload.mode === 'guidance';
   cleanupRecentSendRequests();
   if (clientRequestId) {
     const existing = recentSendRequests.get(clientRequestId);
@@ -2775,6 +2895,7 @@ async function handleSend(req, res) {
       expectNewThread,
       excludeThreadId: expectNewThread ? previousThreadId : '',
       cwd: expectNewThread ? expectedNewThreadCwd : '',
+      guidance: guidanceMode,
     } : null;
     if (clientRequestId) {
       recentSendRequests.set(clientRequestId, {
@@ -2805,6 +2926,7 @@ async function handleSend(req, res) {
       ok: true,
       message: target === 'codex' ? '已切到 Codex，粘贴并按下回车。' : '已粘贴并按下回车。',
       target,
+      guidance: guidanceMode,
       sentAt: new Date().toISOString(),
       attachments: attachments.map(item => ({ name: item.name, size: item.size, type: item.mime })),
       watch,

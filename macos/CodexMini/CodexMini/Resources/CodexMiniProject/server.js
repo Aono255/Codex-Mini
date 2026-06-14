@@ -65,6 +65,13 @@ const codexThreadListCache = new Map();
 let modelCatalogCache = { mtimeMs: -1, path: '', models: null };
 let keepAwakeProcess = null;
 let keepAwakeStartedAt = '';
+const GUARDIAN_APP_BUNDLE_ID = process.env.CODEX_MINI_GUARDIAN_BUNDLE_ID || 'com.kang.codex-mini.app';
+const GUARDIAN_APP_PATH = process.env.CODEX_MINI_GUARDIAN_APP_PATH || '/Applications/Codex Mini.app';
+const GUARDIAN_AUTO_ENABLED_KEY = 'CodexMiniGuardianAutoEnabled';
+const GUARDIAN_IDLE_MINUTES_KEY = 'CodexMiniGuardianIdleMinutes';
+const GUARDIAN_DEFAULT_IDLE_MINUTES = 5;
+const GUARDIAN_MIN_IDLE_MINUTES = 1;
+const GUARDIAN_MAX_IDLE_MINUTES = 180;
 
 function fileCacheSignature(stat) {
   return stat ? `${stat.size}:${stat.mtimeMs}` : '';
@@ -133,6 +140,96 @@ function stopKeepAwake() {
 
 function cleanupKeepAwake() {
   stopKeepAwake();
+}
+
+function clampGuardianIdleMinutes(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return GUARDIAN_DEFAULT_IDLE_MINUTES;
+  return Math.round(Math.min(GUARDIAN_MAX_IDLE_MINUTES, Math.max(GUARDIAN_MIN_IDLE_MINUTES, number)));
+}
+
+function runGuardianCommand(command, args = [], timeoutMs = 4000) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    const timer = setTimeout(() => {
+      try { child.kill('SIGTERM'); } catch {}
+      reject(new Error(`${command} timed out`));
+    }, timeoutMs);
+    child.stdout.on('data', data => { stdout += data.toString(); });
+    child.stderr.on('data', data => { stderr += data.toString(); });
+    child.on('error', error => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.on('close', code => {
+      clearTimeout(timer);
+      if (code === 0) resolve({ stdout, stderr });
+      else reject(Object.assign(new Error(stderr.trim() || `${command} exited with code ${code}`), { code, stdout, stderr }));
+    });
+  });
+}
+
+function guardianModeAvailable() {
+  return process.platform === 'darwin' && fs.existsSync(GUARDIAN_APP_PATH);
+}
+
+async function readGuardianDefault(key, fallback = '') {
+  if (process.platform !== 'darwin') return fallback;
+  try {
+    const { stdout } = await runGuardianCommand('/usr/bin/defaults', ['read', GUARDIAN_APP_BUNDLE_ID, key], 2500);
+    return String(stdout || '').trim();
+  } catch {
+    return fallback;
+  }
+}
+
+async function writeGuardianDefault(key, type, value) {
+  await runGuardianCommand('/usr/bin/defaults', ['write', GUARDIAN_APP_BUNDLE_ID, key, type, String(value)], 3000);
+}
+
+async function openGuardianAppInBackground() {
+  if (!guardianModeAvailable()) return;
+  try {
+    await runGuardianCommand('/usr/bin/open', ['-gj', '-b', GUARDIAN_APP_BUNDLE_ID], 4000);
+  } catch {
+    await runGuardianCommand('/usr/bin/open', ['-gj', GUARDIAN_APP_PATH], 4000).catch(() => {});
+  }
+}
+
+async function guardianModeStatus() {
+  const available = guardianModeAvailable();
+  const enabledRaw = await readGuardianDefault(GUARDIAN_AUTO_ENABLED_KEY, '0');
+  const idleRaw = await readGuardianDefault(GUARDIAN_IDLE_MINUTES_KEY, String(GUARDIAN_DEFAULT_IDLE_MINUTES));
+  const idleMinutes = clampGuardianIdleMinutes(idleRaw);
+  return {
+    available,
+    enabled: /^(1|true|yes)$/i.test(enabledRaw),
+    idleMinutes,
+    timeoutMs: idleMinutes * 60 * 1000,
+    appBundleId: GUARDIAN_APP_BUNDLE_ID,
+    appPath: GUARDIAN_APP_PATH,
+  };
+}
+
+async function updateGuardianModeSettings(payload = {}) {
+  if (!guardianModeAvailable()) {
+    const error = new Error('这台 Mac 没有找到 Codex Mini App，无法配置守护模式。');
+    error.code = 'GUARDIAN_MODE_UNAVAILABLE';
+    throw error;
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'idleMinutes') || Object.prototype.hasOwnProperty.call(payload, 'timeoutMs')) {
+    const minutes = Object.prototype.hasOwnProperty.call(payload, 'idleMinutes')
+      ? payload.idleMinutes
+      : Number(payload.timeoutMs) / 60000;
+    await writeGuardianDefault(GUARDIAN_IDLE_MINUTES_KEY, '-int', clampGuardianIdleMinutes(minutes));
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'enabled')) {
+    await writeGuardianDefault(GUARDIAN_AUTO_ENABLED_KEY, '-bool', payload.enabled === true ? 'true' : 'false');
+  }
+  await openGuardianAppInBackground();
+  return guardianModeStatus();
 }
 
 function readCodexConfigText() {
@@ -615,6 +712,52 @@ function threadIdFromSessionFile(file) {
 
 function normalizeComparableMessage(value) {
   return cleanUserHistoryText(value).replace(/\s+/g, ' ').trim();
+}
+
+function normalizeHistoryMessageFingerprint(value) {
+  const text = normalizeComparableMessage(value);
+  if (!text) return '';
+  return text.length > 300 ? text.slice(0, 300) : text;
+}
+
+function isSyntheticCodexUserMessage(text) {
+  const value = String(text || '').trim();
+  return (
+    !value ||
+    value.startsWith('<environment_context>') ||
+    value.startsWith('# AGENTS.md instructions') ||
+    value.startsWith('<turn_aborted>') ||
+    value.startsWith('<permissions instructions>') ||
+    value.startsWith('<collaboration_mode>') ||
+    value.startsWith('<skills_instructions>') ||
+    value.startsWith('<plugins_instructions>') ||
+    value.startsWith('Another language model started to solve this problem')
+  );
+}
+
+function collectUserEventMessageFingerprintsByTurn(lines = []) {
+  const fingerprintsByTurn = new Map();
+  let turnIndex = -1;
+  for (const line of lines) {
+    let item;
+    try { item = JSON.parse(line); } catch { continue; }
+    const payload = item.payload || {};
+    if (item.type === 'event_msg' && payload.type === 'task_started') {
+      turnIndex += 1;
+      if (!fingerprintsByTurn.has(turnIndex)) fingerprintsByTurn.set(turnIndex, new Set());
+      continue;
+    }
+    if (turnIndex < 0 || item.type !== 'event_msg' || payload.type !== 'user_message') continue;
+    const text = cleanUserHistoryText(payload.message);
+    const fingerprint = normalizeHistoryMessageFingerprint(text);
+    if (fingerprint) fingerprintsByTurn.get(turnIndex).add(fingerprint);
+  }
+  return fingerprintsByTurn;
+}
+
+function fingerprintsForTurn(fingerprintsByTurn, turnIndex) {
+  if (!fingerprintsByTurn.has(turnIndex)) fingerprintsByTurn.set(turnIndex, new Set());
+  return fingerprintsByTurn.get(turnIndex);
 }
 
 function findLatestCodexSessionFile(options = {}) {
@@ -1118,12 +1261,15 @@ function readTailLinesWithLimit(file, maxBytes) {
 function countCodexHistoryMessages(lines, maxNeeded = MAX_HISTORY_MESSAGES) {
   let count = 0;
   let currentTurn = null;
+  let turnIndex = -1;
+  const userEventFingerprintsByTurn = collectUserEventMessageFingerprintsByTurn(lines);
   const need = Math.max(1, Math.min(Number(maxNeeded) || MAX_HISTORY_MESSAGES, MAX_HISTORY_MESSAGES));
   for (const line of lines) {
     let item;
     try { item = JSON.parse(line); } catch { continue; }
     const payload = item.payload || {};
     if (item.type === 'event_msg' && payload.type === 'task_started') {
+      turnIndex += 1;
       currentTurn = { hasAssistant: false };
       continue;
     }
@@ -1131,6 +1277,11 @@ function countCodexHistoryMessages(lines, maxNeeded = MAX_HISTORY_MESSAGES) {
       const text = cleanUserHistoryText(payload.message);
       const attachments = extractUserAttachments(payload);
       if (text || attachments.length) count += 1;
+    } else if (item.type === 'response_item' && payload.type === 'message' && payload.role === 'user' && currentTurn) {
+      const text = cleanUserHistoryText(extractMessageText(payload.content));
+      const fingerprint = normalizeHistoryMessageFingerprint(text);
+      const userEventFingerprints = fingerprintsForTurn(userEventFingerprintsByTurn, turnIndex);
+      if (text && !isSyntheticCodexUserMessage(text) && fingerprint && !userEventFingerprints.has(fingerprint)) count += 1;
     } else if (item.type === 'response_item' && payload.type === 'message' && payload.role === 'assistant' && payload.phase === 'final_answer') {
       const text = normalizeHistoryText(extractMessageText(payload.content));
       if (text) {
@@ -1196,6 +1347,7 @@ function parseCodexThreadHistory(threadId, limit = MAX_HISTORY_MESSAGES) {
 
   const messages = [];
   let currentTurn = null;
+  let turnIndex = -1;
   function historyDurationText(startedAt = '', completedAt = '') {
     const startMs = Date.parse(startedAt || '');
     const endMs = Date.parse(completedAt || '');
@@ -1214,12 +1366,14 @@ function parseCodexThreadHistory(threadId, limit = MAX_HISTORY_MESSAGES) {
     return duration ? `Codex · 失败 ${duration}` : 'Codex';
   }
   const historyTail = readHistoryLinesAdaptive(file, limit);
+  const userEventFingerprintsByTurn = collectUserEventMessageFingerprintsByTurn(historyTail.lines);
   for (const line of historyTail.lines) {
     let item;
     try { item = JSON.parse(line); } catch { continue; }
     const payload = item.payload || {};
 
     if (item.type === 'event_msg' && payload.type === 'task_started') {
+      turnIndex += 1;
       currentTurn = { hasAssistant: false, assistantIndex: -1, failureText: '', startedAt: item.timestamp || '', turnId: payload.turn_id || '' };
       continue;
     }
@@ -1242,6 +1396,25 @@ function parseCodexThreadHistory(threadId, limit = MAX_HISTORY_MESSAGES) {
           text: text || (attachments.length ? ' ' : ''),
           attachments: attachments.map(filePath => ({ filePath, name: path.basename(filePath) })),
           timestamp: item.timestamp || '',
+        });
+      }
+      continue;
+    }
+
+    if (item.type === 'response_item' && payload.type === 'message' && payload.role === 'user') {
+      if (!currentTurn) continue;
+      const text = cleanUserHistoryText(extractMessageText(payload.content));
+      const fingerprint = normalizeHistoryMessageFingerprint(text);
+      const userEventFingerprints = fingerprintsForTurn(userEventFingerprintsByTurn, turnIndex);
+      if (text && !isSyntheticCodexUserMessage(text) && fingerprint && !userEventFingerprints.has(fingerprint)) {
+        userEventFingerprints.add(fingerprint);
+        messages.push({
+          role: 'user',
+          label: '你 · 引导',
+          text,
+          attachments: [],
+          timestamp: item.timestamp || '',
+          guidance: true,
         });
       }
       continue;
@@ -1748,6 +1921,16 @@ function parseCodexStatus(options = {}) {
   const seenThinking = new Set();
   const toolCallsById = new Map();
   const toolStepIndexById = new Map();
+  const turnUserEvents = [];
+  const guidanceMessages = [];
+  const userEventFingerprints = new Set();
+  for (const item of turnItems) {
+    const payload = item.payload || {};
+    if (item.type !== 'event_msg' || payload.type !== 'user_message') continue;
+    const text = cleanUserHistoryText(payload.message);
+    const fingerprint = normalizeHistoryMessageFingerprint(text);
+    if (fingerprint) userEventFingerprints.add(fingerprint);
+  }
 
   for (const item of turnItems) {
     const payload = item.payload || {};
@@ -1772,6 +1955,33 @@ function parseCodexStatus(options = {}) {
       completed = true;
       completedAt = item.timestamp || completedAt;
       turnId = payload.turn_id || turnId;
+    }
+
+    if (item.type === 'event_msg' && payload.type === 'user_message') {
+      const text = cleanUserHistoryText(payload.message);
+      const attachments = extractUserAttachments(payload);
+      if (text || attachments.length) {
+        turnUserEvents.push({
+          text,
+          attachments: attachments.map(filePath => ({ filePath, name: path.basename(filePath) })),
+          timestamp: item.timestamp || '',
+        });
+      }
+    }
+
+    if (item.type === 'response_item' && payload.type === 'message' && payload.role === 'user') {
+      const text = cleanUserHistoryText(extractMessageText(payload.content));
+      const fingerprint = normalizeHistoryMessageFingerprint(text);
+      if (text && !isSyntheticCodexUserMessage(text) && fingerprint && !userEventFingerprints.has(fingerprint)) {
+        userEventFingerprints.add(fingerprint);
+        guidanceMessages.push({
+          role: 'user',
+          label: '你 · 引导',
+          text,
+          timestamp: item.timestamp || '',
+          guidance: true,
+        });
+      }
     }
 
     if (item.type === 'response_item' && payload.type === 'function_call_output' && payload.call_id && toolStepIndexById.has(payload.call_id)) {
@@ -1818,6 +2028,7 @@ function parseCodexStatus(options = {}) {
   const startMs = Date.parse(startedAt || '') || sinceMs || 0;
   const endMs = completedAt ? Date.parse(completedAt) : Date.now();
   const durationMs = startMs ? Math.max(0, endMs - startMs) : 0;
+  const turnUser = turnUserEvents[turnUserEvents.length - 1] || null;
   return {
     ok: true,
     available: true,
@@ -1838,6 +2049,11 @@ function parseCodexStatus(options = {}) {
     final: final || '',
     error: finalFailureText,
     steps: statusSteps,
+    turnUserMessage: turnUser?.text || '',
+    turnUserAttachments: turnUser?.attachments || [],
+    turnUserMessageAt: turnUser?.timestamp || '',
+    turnUserLabel: turnUser?.attachments?.length ? `你 · ${turnUser.attachments.length} 个附件` : '你',
+    guidanceMessages,
   };
 }
 
@@ -2639,6 +2855,7 @@ async function handleSend(req, res) {
   const previousThreadId = isCodexThreadId(payload.previousThreadId) ? payload.previousThreadId : '';
   const expectedNewThreadCwd = validLocalDirectory(typeof payload.expectedCwd === 'string' ? payload.expectedCwd : '');
   const clientRequestId = normalizeClientRequestId(payload.clientRequestId);
+  const guidanceMode = payload.guidance === true || payload.mode === 'guidance';
   cleanupRecentSendRequests();
   if (clientRequestId) {
     const existing = recentSendRequests.get(clientRequestId);
@@ -2678,6 +2895,7 @@ async function handleSend(req, res) {
       expectNewThread,
       excludeThreadId: expectNewThread ? previousThreadId : '',
       cwd: expectNewThread ? expectedNewThreadCwd : '',
+      guidance: guidanceMode,
     } : null;
     if (clientRequestId) {
       recentSendRequests.set(clientRequestId, {
@@ -2708,6 +2926,7 @@ async function handleSend(req, res) {
       ok: true,
       message: target === 'codex' ? '已切到 Codex，粘贴并按下回车。' : '已粘贴并按下回车。',
       target,
+      guidance: guidanceMode,
       sentAt: new Date().toISOString(),
       attachments: attachments.map(item => ({ name: item.name, size: item.size, type: item.mime })),
       watch,
@@ -2770,7 +2989,7 @@ function getLanApiBases() {
   return [...bases];
 }
 
-function handleClientConfig(req, res) {
+async function handleClientConfig(req, res) {
   if (!isAuthorized(req)) return json(res, 401, { ok: false, code: 'UNAUTHORIZED', message: '访问令牌不正确。' });
   return json(res, 200, {
     ok: true,
@@ -2779,6 +2998,7 @@ function handleClientConfig(req, res) {
     localOnly: true,
     localApiBases: getLanApiBases(),
     modelOptions: readModelCatalogOptions(),
+    guardianMode: await guardianModeStatus(),
   });
 }
 
@@ -2822,6 +3042,35 @@ async function handleKeepAwake(req, res) {
   }
 }
 
+async function handleGuardianMode(req, res) {
+  if (!isAuthorized(req)) return json(res, 401, { ok: false, code: 'UNAUTHORIZED', message: '访问令牌不正确。' });
+  if (req.method === 'GET') {
+    return json(res, 200, { ok: true, ...(await guardianModeStatus()) });
+  }
+
+  let payload = {};
+  try {
+    payload = JSON.parse(await readBody(req) || '{}');
+  } catch (error) {
+    return json(res, 400, { ok: false, code: 'BAD_REQUEST', message: error.message || '请求格式不正确。' });
+  }
+
+  try {
+    const status = await updateGuardianModeSettings(payload);
+    return json(res, 200, {
+      ok: true,
+      ...status,
+      message: status.enabled ? '已开启守护模式自动保护。' : '已关闭守护模式自动保护。',
+    });
+  } catch (error) {
+    return json(res, 500, {
+      ok: false,
+      code: error.code || 'GUARDIAN_MODE_FAILED',
+      message: error.message || '更新守护模式失败。',
+    });
+  }
+}
+
 function getLanUrls() {
   const nets = os.networkInterfaces();
   const urls = new Set([`http://localhost:${PORT}/?token=${TOKEN}`]);
@@ -2843,6 +3092,7 @@ const server = http.createServer((req, res) => {
   if (req.method === 'GET' && req.url.startsWith('/codex/threads')) return handleThreads(req, res);
   if (req.method === 'GET' && req.url.startsWith('/codex/history')) return handleThreadHistory(req, res);
   if (req.method === 'GET' && req.url.startsWith('/codex/status')) return handleCodexStatus(req, res);
+  if ((req.method === 'GET' || req.method === 'POST') && req.url.startsWith('/codex/guardian-mode')) return handleGuardianMode(req, res);
   if ((req.method === 'GET' || req.method === 'POST') && req.url.startsWith('/codex/keep-awake')) return handleKeepAwake(req, res);
   if (req.method === 'POST' && req.url.startsWith('/codex/select')) return handleSelectThread(req, res);
   if (req.method === 'POST' && req.url.startsWith('/codex/new-thread')) return handleNewCodexThread(req, res);

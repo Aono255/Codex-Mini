@@ -344,20 +344,44 @@
       line-height: 1;
       transform: translateY(.5px);
     }
+    .model-badge {
+      min-width: 74px;
+      max-width: 132px;
+      padding: 0 9px 0 10px;
+      grid-auto-flow: column;
+      grid-auto-columns: minmax(0, auto);
+      justify-content: center;
+      gap: 5px;
+    }
+    #model-text {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .model-badge::after {
+      content: "";
+      width: 5px;
+      height: 5px;
+      border-right: 1.6px solid currentColor;
+      border-bottom: 1.6px solid currentColor;
+      transform: translateY(-1px) rotate(45deg);
+      opacity: .68;
+      flex: 0 0 auto;
+    }
     .model-menu-card {
       position: fixed;
       grid-column: 1 / -1;
       z-index: 120;
       display: none;
-      grid-template-columns: repeat(2, minmax(116px, max-content));
+      grid-template-columns: minmax(0, 1fr);
       gap: 8px;
-      min-width: 182px;
-      width: max-content;
+      min-width: min(252px, calc(100vw - 24px));
+      width: min(292px, calc(100vw - 24px));
       max-width: calc(100vw - 24px);
       padding: 10px;
-      border-radius: 18px;
-      border: 1px solid rgba(142,240,183,.22);
-      background: linear-gradient(rgba(142,240,183,.08), rgba(142,240,183,.08)), #13263a;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02)), rgba(20,22,27,.98);
       box-shadow: 0 18px 42px rgba(0,0,0,.36);
       backdrop-filter: blur(18px);
       -webkit-backdrop-filter: blur(18px);
@@ -365,25 +389,42 @@
     .model-menu-card.is-open { display: grid; }
     .model-menu-item {
       min-width: 0;
-      height: 34px;
+      height: 44px;
       appearance: none;
-      border: 1px solid rgba(142,240,183,.24);
-      border-radius: 999px;
-      background: rgba(142,240,183,.11);
-      color: var(--ok);
-      padding: 0 12px;
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 12px;
+      background: rgba(255,255,255,.055);
+      color: var(--text);
+      padding: 0 11px;
       font: inherit;
       font-size: 12px;
       font-weight: 760;
       line-height: 1;
-      display: inline-flex;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
       align-items: center;
-      justify-content: center;
-      gap: 6px;
+      justify-content: stretch;
+      gap: 10px;
       cursor: pointer;
       touch-action: manipulation;
-      white-space: nowrap;
+      text-align: left;
       position: relative;
+    }
+    .model-menu-label {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .model-menu-source {
+      grid-column: 2;
+      flex: 0 0 auto;
+      color: currentColor;
+      opacity: .62;
+      font-size: 10px;
+      font-weight: 820;
+      letter-spacing: 0;
+      white-space: nowrap;
     }
     .model-menu-item.source-official {
       color: #ffd447;
@@ -415,6 +456,8 @@
       background: currentColor;
       box-shadow: 0 0 10px currentColor;
       flex: 0 0 auto;
+      grid-column: 3;
+      grid-row: 1;
     }
     .reasoning-menu-card {
       grid-template-columns: minmax(0, 1fr);
@@ -1160,7 +1203,7 @@
       position: fixed;
       left: 0;
       right: 0;
-      top: 0;
+      top: calc(max(0px, calc(env(safe-area-inset-top) - var(--topbar-safe-lift))) + var(--topbar-row-height));
       bottom: 0;
       z-index: 19;
       display: none;
@@ -1173,12 +1216,12 @@
     .thread-menu {
       position: fixed;
       left: 0;
-      top: 0;
+      top: calc(max(0px, calc(env(safe-area-inset-top) - var(--topbar-safe-lift))) + var(--topbar-row-height));
       bottom: 0;
       z-index: 20;
       display: block;
       width: min(86vw, 390px);
-      padding: max(12px, env(safe-area-inset-top)) 8px max(12px, env(safe-area-inset-bottom));
+      padding: 8px 8px max(12px, env(safe-area-inset-bottom));
       border: 1px solid var(--line);
       border-left: 0;
       border-radius: 0 25px 25px 0;
@@ -2143,6 +2186,9 @@
       background: #202020;
       box-shadow: none;
     }
+    .composer.is-running {
+      grid-template-columns: auto minmax(0, 1fr) auto auto;
+    }
     body.dot-blue {
       --signature-dot-tint-a: color(display-p3 .58 .77 1);
       --signature-dot-tint-b: color(display-p3 .48 .70 1);
@@ -2253,7 +2299,8 @@
       mask-composite: exclude;
       opacity: .98;
     }
-    body.color-flow-on .icon-btn {
+    body.color-flow-on .icon-btn,
+    body.color-flow-on .guide-btn {
       color: transparent;
       -webkit-text-fill-color: transparent;
       background: linear-gradient(92deg, rgba(255,255,255,.54) 0%, rgba(158,203,255,1) 28%, var(--signature-dot-tint-a) 46%, rgba(142,240,183,.9) 64%, var(--signature-dot-tint-b) 78%, rgba(255,255,255,.54) 100%);
@@ -2324,6 +2371,7 @@
     body.color-flow-on .composer::before,
     body.color-flow-on .thread-menu,
     body.color-flow-on .icon-btn,
+    body.color-flow-on .guide-btn,
     body.color-flow-on .send-btn::before {
       animation: signatureColorFlow 4.8s ease-in-out infinite;
     }
@@ -2334,9 +2382,10 @@
       body.color-flow-on .composer::before,
       body.color-flow-on .thread-menu,
       body.color-flow-on .icon-btn,
+      body.color-flow-on .guide-btn,
       body.color-flow-on .send-btn::before { animation: none; }
     }
-    .icon-btn, .send-btn {
+    .icon-btn, .send-btn, .guide-btn {
       appearance: none;
       border: 0;
       width: 36px;
@@ -2353,8 +2402,29 @@
       cursor: pointer;
       touch-action: manipulation;
     }
-    .icon-btn:active, .send-btn:active { transform: scale(.96); }
+    .icon-btn:active, .send-btn:active, .guide-btn:active { transform: scale(.96); }
     .composer-action-hidden { display: none; }
+    .guide-btn {
+      display: none;
+      color: #9ecbff;
+      font-size: 0;
+    }
+    .guide-btn.is-visible { display: grid; }
+    .guide-btn svg {
+      width: 18px;
+      height: 18px;
+      display: block;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2.1;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vector-effect: non-scaling-stroke;
+    }
+    .guide-btn:disabled {
+      opacity: .45;
+      cursor: wait;
+    }
     .stop-btn:disabled { opacity: .45; cursor: wait; }
     .stop-square {
       width: 13px;
@@ -2501,6 +2571,7 @@
       .route-badge svg { width: 14px; height: 14px; transform: translateY(.2px); }
       .reasoning-badge,
       .model-badge { min-width: 38px; padding-inline: 8px; font-size: 11px; }
+      .model-badge { min-width: 64px; max-width: 102px; padding-inline: 8px 7px; }
       .reasoning-badge { min-width: 30px; font-size: 10px; }
       .context-status.mode-ring { width: calc(var(--top-control-size) - 2.5px); min-width: calc(var(--top-control-size) - 2.5px); height: calc(var(--top-control-size) - 2.5px); }
       .context-status .context-ring { width: calc(var(--top-control-size) - 2.5px); height: calc(var(--top-control-size) - 2.5px); }
@@ -2646,7 +2717,8 @@
     /* 签名与彩色流动在浅色下的可读性 */
     .theme-light .composer-signature { background: linear-gradient(92deg, rgba(28,28,30,.66) 0%, rgba(23,122,76,.78) 55%, rgba(31,111,208,.72) 100%); -webkit-background-clip: text; background-clip: text; }
     .theme-light body.signature-plain .composer-signature { text-shadow: 0 0 16px rgba(0,0,0,.06); }
-    .theme-light body.color-flow-on .icon-btn { background: linear-gradient(92deg, rgba(28,28,30,.72) 0%, rgba(23,122,76,.82) 100%); -webkit-background-clip: text; background-clip: text; }
+    .theme-light body.color-flow-on .icon-btn,
+    .theme-light body.color-flow-on .guide-btn { background: linear-gradient(92deg, rgba(28,28,30,.72) 0%, rgba(23,122,76,.82) 100%); -webkit-background-clip: text; background-clip: text; }
     .theme-light body.color-flow-on .thread-menu { background: linear-gradient(rgba(252,252,253,.98), rgba(252,252,253,.98)); }
     .theme-light .composer { background: #ffffff; border-color: rgba(0,0,0,.12); box-shadow: 0 6px 22px rgba(31,35,40,.08); }
     .theme-light .permission-menu-item-desc { color: rgba(28,28,30,.56); }
@@ -2656,6 +2728,7 @@
     .theme-light body.signature-plain .composer-signature { color: rgba(28,28,30,.62); }
     .theme-light .settings-switch.is-on { background: linear-gradient(92deg, rgba(31,111,208,.78), rgba(23,138,84,.82), rgba(176,106,20,.66)); }
     .theme-light .settings-btn { border-color: rgba(0,0,0,.14); background: rgba(0,0,0,.05); color: rgba(28,28,30,.62); }
+    .theme-light .guide-btn { color: #155fb8; }
     .theme-light .settings-btn:active { background: rgba(0,0,0,.09); }
     .theme-light .thread-button:active { background: rgba(0,0,0,.05); }
     .theme-light body.color-flow-on textarea::placeholder { color: rgba(31,111,208,.62); text-shadow: none; }
@@ -2819,6 +2892,9 @@
         <button class="icon-btn" id="attach" type="button" title="添加照片或附件" aria-label="添加照片或附件">＋</button>
         <input class="file-input" id="file-input" type="file" multiple />
         <textarea id="text" rows="1" autocomplete="off" autocapitalize="sentences" spellcheck="false" placeholder="发消息给 Codex Mini"></textarea>
+        <button class="guide-btn" id="guide-send" type="button" title="发送引导消息" aria-label="发送引导消息">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3"/><path d="M12 18v3"/><path d="M4.22 5.64 6.34 7.76"/><path d="M17.66 16.24l2.12 2.12"/><path d="M3 12h3"/><path d="M18 12h3"/><path d="M4.22 18.36l2.12-2.12"/><path d="M17.66 7.76l2.12-2.12"/><path d="m9 12 2 2 4-4"/></svg>
+        </button>
         <button class="send-btn stop-btn composer-action-hidden" id="stop" type="button" title="取消当前 Codex 回复" aria-label="取消当前 Codex 回复" hidden><span class="stop-square" aria-hidden="true"></span></button>
         <button class="send-btn" id="send" type="submit" title="发送给 Codex Mini" aria-label="发送给 Codex Mini">↑</button>
       </form>
@@ -2835,6 +2911,7 @@
     const composerSignature = document.querySelector('.composer-signature');
     const textarea = document.getElementById('text');
     const sendButton = document.getElementById('send');
+    const guideSendButton = document.getElementById('guide-send');
     const stopButton = document.getElementById('stop');
     const attachButton = document.getElementById('attach');
     const fileInput = document.getElementById('file-input');
@@ -3054,6 +3131,7 @@
     let switchingReasoningMode = false;
     let currentModelInfo = null;
     let switchingModel = false;
+    let sendingGuidance = false;
     let routeBadgeCompact = false;
     let foregroundDotBusy = false;
     let topActionsUserScrollUntil = 0;
@@ -3073,6 +3151,7 @@
     let lastTextareaFocusPrepareAt = 0;
     let lastOutsideComposerTouchAt = 0;
     let suppressNextTextareaBlurRestore = false;
+    let appendedGuidanceMessageKeys = new Set();
     const STORAGE_PREFIX = scopedStorageKey('codexMiniChat.v3');
     const GROUPS_STORAGE_KEY = scopedStorageKey('codexMini.threadGroups.open.v1');
     const THREAD_NOTICE_STORAGE_KEY = scopedStorageKey('codexMini.threadCompleteNotices.v1');
@@ -4023,6 +4102,19 @@
       if (versionMatch) return versionMatch[1];
       return model?.label || display || '--';
     }
+    function modelCompactLabel(model = currentModelInfo) {
+      const source = model?.source || 'unknown';
+      const sourceText = source === 'relay' ? '中转' : source === 'official' ? '官方' : source === 'local' ? '本地' : '';
+      const label = modelBadgeLabel(model);
+      if (!label || label === '--') return '--';
+      return sourceText ? `${sourceText} ${label}` : label;
+    }
+    function modelSourceLabel(source = '') {
+      if (source === 'relay') return '中转';
+      if (source === 'official') return '官方';
+      if (source === 'local') return '本地';
+      return '未知';
+    }
     function renderModelMenu() {
       const currentKey = currentModelMenuKey();
       modelMenuCard.textContent = '';
@@ -4032,7 +4124,13 @@
         const sourceClass = item.source ? ` source-${item.source}` : '';
         button.className = `model-menu-item${sourceClass}${item.key === currentKey ? ' is-current' : ''}`;
         button.dataset.target = item.key;
-        button.textContent = item.label;
+        const label = document.createElement('span');
+        label.className = 'model-menu-label';
+        label.textContent = item.label;
+        const source = document.createElement('span');
+        source.className = 'model-menu-source';
+        source.textContent = modelSourceLabel(item.source);
+        button.append(label, source);
         button.title = item.displayName;
         button.setAttribute('aria-label', `${item.displayName}${item.key === currentKey ? '（当前）' : ''}`);
         wireInstantActionButton(button, () => {
@@ -4050,7 +4148,7 @@
     }
     function renderModelBadge(model = currentModelInfo) {
       currentModelInfo = model || null;
-      const label = modelBadgeLabel(model);
+      const label = modelCompactLabel(model);
       const source = model?.source || 'unknown';
       modelText.textContent = label;
       modelBadge.className = `model-badge is-${source}${switchingModel ? ' is-switching' : ''}`;
@@ -6023,6 +6121,7 @@
     function clearThreadMessages() {
       [...thread.querySelectorAll('.message')].forEach(node => node.remove());
       clearQueuedSends();
+      appendedGuidanceMessageKeys = new Set();
     }
 
     function updateThreadTitle() {
@@ -7032,6 +7131,33 @@
       lastUserMessageMarker = { threadId: threadId || '', at: at || '', text: String(text || '') };
     }
 
+    function guidanceMessageKey(row = {}) {
+      return [
+        row.timestamp || '',
+        String(row.text || '').replace(/\s+/g, ' ').trim().slice(0, 260),
+      ].join('|');
+    }
+
+    function appendGuidanceMessages(rows = []) {
+      if (!Array.isArray(rows) || !rows.length) return false;
+      let appended = false;
+      for (const row of rows) {
+        const text = String(row?.text || '');
+        if (!text.trim()) continue;
+        const key = guidanceMessageKey(row);
+        if (appendedGuidanceMessageKeys.has(key)) continue;
+        appendedGuidanceMessageKeys.add(key);
+        messageEl('user', text, { label: row.label || '你 · 引导' });
+        appended = true;
+      }
+      if (appended && activeAssistant?.article?.isConnected) {
+        thread.appendChild(activeAssistant.article);
+        scrollBottom();
+      }
+      if (appended) serializeMessages();
+      return appended;
+    }
+
     function appendDesktopUserMessageIfMissing(threadId, data) {
       const text = String(data.turnUserMessage || '');
       const attachments = Array.isArray(data.turnUserAttachments) ? data.turnUserAttachments : [];
@@ -7092,6 +7218,7 @@
       if (!isRunningStatus(data)) return false;
 
       appendDesktopUserMessageIfMissing(threadId, data);
+      appendGuidanceMessages(data.guidanceMessages || []);
       const durationText = formatDuration(data.durationMs || 0);
       const resumeCommandKind = latestUserCommandKind();
       const resumeCommandUi = commandUi(resumeCommandKind);
@@ -7137,6 +7264,7 @@
               skipScroll: true,
             });
             if (row.attachments?.length) appendAttachmentsToBubble(msg, row.attachments);
+            if (row.guidance) appendedGuidanceMessageKeys.add(guidanceMessageKey(row));
           }
         } finally {
           finishHistoryRenderAtBottom();
@@ -7306,6 +7434,7 @@
           applyThreadRuntimeState(data.threadId || watch.threadId || selectedThreadId, runtimeSnapshotFromStatusData(data), { detectTransitions: true });
           renderThreadMenuIfVisualChanged();
           lastStatusSignature = codexStatusSignature(data);
+          appendGuidanceMessages(data.guidanceMessages || []);
         }
         setActiveRunStart(data.startedAt || watch.since || '', Date.now() - (Number(data.durationMs) || 0));
         const activeCommandUi = commandUi(activeAssistant.commandKind || '');
@@ -7859,9 +7988,11 @@
       const cardHeight = modelMenuCard.offsetHeight || 160;
       const rightAlignedLeft = anchor.right - cardWidth;
       const left = Math.max(margin, Math.min(viewportWidth - cardWidth - margin, rightAlignedLeft));
+      const topbarBottom = topbar ? topbar.getBoundingClientRect().bottom : 0;
+      const minTop = Math.max(margin, topbarBottom + 7);
       const belowTop = anchor.bottom + 7;
       const aboveTop = anchor.top - cardHeight - 7;
-      const top = belowTop + cardHeight + margin <= viewportHeight ? belowTop : Math.max(margin, aboveTop);
+      const top = belowTop + cardHeight + margin <= viewportHeight ? Math.max(minTop, belowTop) : Math.max(minTop, aboveTop);
       modelMenuCard.style.left = `${Math.round(left)}px`;
       modelMenuCard.style.top = `${Math.round(top)}px`;
     }
@@ -8029,6 +8160,8 @@
       sendButton.classList.toggle('composer-action-hidden', running);
       stopButton.hidden = !running;
       stopButton.classList.toggle('composer-action-hidden', !running);
+      guideSendButton.classList.toggle('is-visible', running);
+      guideSendButton.disabled = sendingGuidance;
       composer.classList.toggle('is-running', running);
       updateTitleDotState();
     }
@@ -8141,6 +8274,58 @@
         if (!activeAssistant && !pollTimer) setWorkingDot(false);
         if (hasTextOverride) restoreLayoutAfterKeyboard();
         else textarea.focus({ preventScroll: true });
+      }
+    }
+
+    async function sendGuidanceText() {
+      if (sendingGuidance) return;
+      if (!(activeAssistant || pollTimer)) {
+        setNotice('当前没有正在运行的 Codex 回复', 'error');
+        return;
+      }
+      if (!selectedThreadId) {
+        setNotice('请先选择一个已有线程', 'error');
+        return;
+      }
+      const text = textarea.value;
+      if (!text.trim()) return;
+      sendingGuidance = true;
+      updateComposerAction();
+      setWorkingDot(true);
+      setNotice('正在发送引导消息…', 'ok');
+      try {
+        await ensureRouteForSend();
+        const clientRequestId = `guide-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const requestBody = JSON.stringify({
+          clientRequestId,
+          text,
+          target,
+          threadId: selectedThreadId,
+          assumeThreadSynced: true,
+          guidance: true,
+        });
+        const res = await fetchApi('/send', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-mobile-typer-token': token },
+          body: requestBody,
+          apiTimeoutMs: 60000,
+          routeSwitchQuiet: true,
+          retryProbeTimeoutMs: 900,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) throw new Error(data.message || '发送引导失败');
+        appendGuidanceMessages([{ text, label: '你 · 引导', timestamp: data.sentAt || new Date().toISOString() }]);
+        textarea.value = '';
+        autosize();
+        setNotice('已发送引导消息', 'ok');
+        if (data.watch) activeWatch = { ...(activeWatch || {}), ...data.watch };
+      } catch (error) {
+        setNotice(error.message || '发送引导失败', 'error');
+      } finally {
+        sendingGuidance = false;
+        updateComposerAction();
+        if (!activeAssistant && !pollTimer) setWorkingDot(false);
+        textarea.focus({ preventScroll: true });
       }
     }
 
@@ -8297,6 +8482,7 @@
 
     let stopPointerTriggeredAt = 0;
     let sendPointerTriggeredAt = 0;
+    let guidePointerTriggeredAt = 0;
     function keepKeyboardForStopButton(event) {
       if (event.cancelable) event.preventDefault();
       event.stopPropagation();
@@ -8318,6 +8504,13 @@
       if (sendButton.disabled || sendButton.hidden) return;
       sendPointerTriggeredAt = Date.now();
       sendText();
+    }
+
+    function triggerGuideButtonAction(event) {
+      keepKeyboardForSendButton(event);
+      if (guideSendButton.disabled || !guideSendButton.classList.contains('is-visible')) return;
+      guidePointerTriggeredAt = Date.now();
+      sendGuidanceText();
     }
 
     stopButton.addEventListener('pointerdown', keepKeyboardForStopButton, { passive: false });
@@ -8352,6 +8545,23 @@
       if (Date.now() - sendPointerTriggeredAt < 700) return;
       if (sendButton.disabled || sendButton.hidden) return;
       sendText();
+    });
+    guideSendButton.addEventListener('pointerdown', keepKeyboardForSendButton, { passive: false });
+    guideSendButton.addEventListener('pointerup', triggerGuideButtonAction, { passive: false });
+    guideSendButton.addEventListener('touchstart', keepKeyboardForSendButton, { passive: false });
+    guideSendButton.addEventListener('touchend', event => {
+      if (window.PointerEvent) {
+        keepKeyboardForSendButton(event);
+        return;
+      }
+      triggerGuideButtonAction(event);
+    }, { passive: false });
+    guideSendButton.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (Date.now() - guidePointerTriggeredAt < 700) return;
+      if (guideSendButton.disabled || !guideSendButton.classList.contains('is-visible')) return;
+      sendGuidanceText();
     });
     attachButton.addEventListener('click', () => {
       fileInput.click();
@@ -8527,7 +8737,7 @@
     function positionThreadMenuCard() {
       if (!threadMenu) return;
       const styles = window.getComputedStyle(threadMenu);
-      if (styles.position !== 'fixed' || styles.transform !== 'none') {
+      if (styles.position !== 'fixed') {
         threadMenu.style.top = '';
         threadMenu.style.maxHeight = '';
         if (threadMenuScrim) {
@@ -8536,6 +8746,7 @@
         }
         return;
       }
+      if (!threadMenu.classList.contains('is-open') && styles.transform !== 'none') return;
       const gap = threadMenuEdgeGap();
       const topbarBottom = topbar ? topbar.getBoundingClientRect().bottom : 0;
       const top = Math.max(0, topbarBottom + gap);
@@ -8757,26 +8968,14 @@
       event.preventDefault();
       event.stopPropagation();
       if (Date.now() < suppressModelClickUntil) return;
-      closePermissionMenu();
-      closeReasoningMenu();
-      closeModelMenu();
-      if (betaMode) {
-        openModelMenu();
-        return;
-      }
-      switchCurrentModel();
+      if (modelMenuCard.classList.contains('is-open')) closeModelMenu();
+      else openModelMenu();
     });
     modelBadge.addEventListener('keydown', event => {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
-        closePermissionMenu();
-        closeReasoningMenu();
-        closeModelMenu();
-        if (betaMode) {
-          openModelMenu();
-          return;
-        }
-        switchCurrentModel();
+        if (modelMenuCard.classList.contains('is-open')) closeModelMenu();
+        else openModelMenu();
       } else if (event.key === 'ArrowDown') {
         event.preventDefault();
         openModelMenu();
