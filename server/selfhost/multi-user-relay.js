@@ -434,6 +434,29 @@ function handleDeviceList(req, res) {
   return html(res, 200, deviceSelectionPage(user, devices));
 }
 
+function handleDeviceListJson(req, res) {
+  if (req.method !== 'GET') return json(res, 405, { ok: false, code: 'METHOD_NOT_ALLOWED', message: 'Method not allowed' });
+  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  let user;
+  try {
+    user = normalizePathPart(url.searchParams.get('user') || '', 'user');
+  } catch {
+    return json(res, 400, { ok: false, code: 'BAD_USER', message: '用户名格式不正确。' });
+  }
+  const devices = accessibleDevicesForUser(user, userSessionToken(req, user));
+  if (!devices.length) return json(res, 401, { ok: false, code: 'UNAUTHORIZED', message: '登录已失效，请重新登录。' });
+  return json(res, 200, {
+    ok: true,
+    user,
+    devices: devices.map(device => ({
+      user: device.user,
+      device: device.device,
+      displayName: device.displayName || device.device,
+      pathPrefix: device.pathPrefix,
+    })),
+  });
+}
+
 async function handleDeviceSelect(req, res) {
   let params;
   if (req.method === 'GET') {
@@ -636,6 +659,7 @@ const server = http.createServer((req, res) => {
   if (req.method === 'GET' && req.url === '/') return redirect(res, '/login');
   if (req.url === '/login' || req.url.startsWith('/login?')) return handleLogin(req, res);
   if (req.url === '/devices' || req.url.startsWith('/devices?')) return handleDeviceList(req, res);
+  if (req.url === '/devices.json' || req.url.startsWith('/devices.json?')) return handleDeviceListJson(req, res);
   if (req.url === '/select-device' || req.url.startsWith('/select-device?')) return handleDeviceSelect(req, res);
   if (req.method === 'GET' && (req.url === '/logout' || req.url.startsWith('/logout?'))) return handleLogout(req, res);
   if (req.method === 'GET' && req.url === '/healthz') {

@@ -1160,24 +1160,28 @@
       position: fixed;
       left: 0;
       right: 0;
-      top: calc(max(0px, calc(env(safe-area-inset-top) - var(--topbar-safe-lift))) + var(--topbar-row-height));
+      top: 0;
       bottom: 0;
       z-index: 19;
       display: none;
-      background: var(--bg);
-      pointer-events: none;
+      background: rgba(0,0,0,.42);
+      pointer-events: auto;
+      opacity: 0;
+      transition: opacity .18s ease;
     }
-    body:has(.thread-menu.is-open) .thread-menu-scrim { display: block; }
+    body:has(.thread-menu.is-open) .thread-menu-scrim { display: block; opacity: 1; }
     .thread-menu {
       position: fixed;
-      left: var(--thread-menu-edge-gap);
-      top: calc(max(0px, calc(env(safe-area-inset-top) - var(--topbar-safe-lift))) + var(--topbar-row-height) + var(--thread-menu-edge-gap));
+      left: 0;
+      top: 0;
+      bottom: 0;
       z-index: 20;
-      display: none;
-      width: min(520px, calc(100vw - (var(--thread-menu-edge-gap) * 2)));
-      padding: 8px;
+      display: block;
+      width: min(86vw, 390px);
+      padding: max(12px, env(safe-area-inset-top)) 8px max(12px, env(safe-area-inset-bottom));
       border: 1px solid var(--line);
-      border-radius: 29px;
+      border-left: 0;
+      border-radius: 0 25px 25px 0;
       background: rgba(24,24,27,.98);
       box-shadow: 0 18px 60px rgba(0,0,0,.45);
       -webkit-text-size-adjust: 100%;
@@ -1185,13 +1189,15 @@
       scrollbar-width: none;
       -ms-overflow-style: none;
       backdrop-filter: blur(18px);
-      max-height: min(78svh, 720px);
+      max-height: none;
       overflow: auto;
+      transform: translateX(calc(-100% - 12px));
+      transition: transform .22s cubic-bezier(.2,.8,.2,1);
       -webkit-user-select: none;
       user-select: none;
       -webkit-touch-callout: none;
     }
-    .thread-menu.is-open { display: block; }
+    .thread-menu.is-open { transform: translateX(0); }
     .thread-menu::-webkit-scrollbar { width: 0; height: 0; display: none; }
     .thread-action-card {
       position: fixed;
@@ -1490,8 +1496,11 @@
       }
       .thread-menu {
         position: relative;
+        transform: none;
+        transition: none;
         left: auto;
         top: auto;
+        bottom: auto;
         grid-column: 1;
         grid-row: 2 / 4;
         align-self: stretch;
@@ -1499,6 +1508,8 @@
         width: auto;
         max-height: none;
         min-height: 0;
+        padding: 8px;
+        border-left: 1px solid var(--line);
         margin: var(--ipad-layout-gap);
         border-radius: 29px;
         background: rgba(24,24,27,.98);
@@ -2875,7 +2886,17 @@
       if (relayMatch) return relayMatch[0].replace(/\/$/, '');
       return '';
     }
+    function parseRelayDevicePath(pathname) {
+      const match = pathname.match(/^\/u\/([^/]+)\/([^/]+)(?:\/|$)/);
+      if (!match) return null;
+      return {
+        user: decodeURIComponent(match[1]),
+        device: decodeURIComponent(match[2]),
+        pathPrefix: `/u/${match[1]}/${match[2]}`,
+      };
+    }
     const basePath = detectRelayBasePath(location.pathname);
+    const relayDeviceContext = parseRelayDevicePath(location.pathname);
     const scopedStorageKey = key => basePath ? `${key}:${basePath}` : key;
     const cookiePath = basePath ? `${basePath}/` : '/';
     const TOKEN_STORAGE_KEY = scopedStorageKey('codexMini.token');
@@ -2901,6 +2922,16 @@
     let pendingNewThread = null;
     let knownThreads = [];
     let threadScopeMessage = '';
+    let knownDevices = relayDeviceContext ? [{
+      user: relayDeviceContext.user,
+      device: relayDeviceContext.device,
+      displayName: relayDeviceContext.device,
+      pathPrefix: relayDeviceContext.pathPrefix,
+    }] : [];
+    let deviceThreadCache = new Map();
+    let deviceThreadLoadBusy = false;
+    let deviceThreadLoadedAt = 0;
+    let deviceThreadError = '';
     let pollTimer = null;
     let runDurationTimer = null;
     let pollAttempts = 0;
@@ -4263,7 +4294,7 @@
       closeModelMenu();
       closeThreadActionCard();
       closeContextQuickCard();
-      threadMenu.classList.remove('is-open');
+      closeThreadMenu();
       const willOpen = !settingsCard.classList.contains('is-open');
       settingsCard.classList.toggle('is-open', willOpen);
       if (willOpen) {
@@ -6062,7 +6093,10 @@
         .map(item => `${item.id}:${item.name || ''}:${item.pinned ? 'pinned' : 'normal'}:${threadMenuStateForItem(item)}`)
         .join('|');
       const openPart = [...openProjectKeys].sort().join(',');
-      return `${selectedThreadId}::${openPart}::${currentProjectSortMode()}::${projectOrderSignature()}::${threadPart}`;
+      const devicePart = knownDevices
+        .map(device => `${device.pathPrefix || ''}:${device.displayName || ''}:${(deviceThreadCache.get(device.pathPrefix || '')?.threads || []).map(item => `${item.id}:${item.name || ''}`).join(',')}`)
+        .join('|');
+      return `${selectedThreadId}::${openPart}::${currentProjectSortMode()}::${projectOrderSignature()}::${deviceThreadError}::${threadPart}::${devicePart}`;
     }
 
     function renderThreadMenuIfVisualChanged() {
@@ -6164,6 +6198,62 @@
       parent.appendChild(button);
     }
 
+    function isCurrentDevicePath(pathPrefix) {
+      return normalizeBaseUrl(`${location.origin}${pathPrefix || ''}`) === currentApiBase || String(pathPrefix || '') === basePath;
+    }
+
+    function deviceDisplayName(device) {
+      return device?.displayName || device?.device || '当前设备';
+    }
+
+    function threadDeviceLabel(device) {
+      if (!device?.user || !device?.device) return deviceDisplayName(device);
+      return `${device.user}/${device.device}`;
+    }
+
+    function appendRemoteThreadOption(parent, item, device) {
+      const button = document.createElement('button');
+      const name = document.createElement('span');
+      const state = document.createElement('span');
+      const text = document.createElement('span');
+      button.className = `thread-option is-remote-device${item.pinned ? ' is-pinned' : ''}`;
+      button.type = 'button';
+      button.title = `${deviceDisplayName(device)} · ${item.cwd || item.projectPath || item.name || ''}`;
+      button.setAttribute('aria-current', 'false');
+      name.className = 'thread-option-title';
+      state.className = 'thread-option-state';
+      text.className = 'thread-title-text';
+      text.textContent = item.name || '未命名线程';
+      if (item.pinned) {
+        const pin = document.createElement('span');
+        pin.className = 'thread-title-pin';
+        pin.innerHTML = PIN_ICON;
+        name.append(pin, text);
+      } else {
+        name.appendChild(text);
+      }
+      state.textContent = formatRelativeTime(item.effectiveUpdatedAt || item.updatedAt) || item.id.slice(0, 8);
+      button.append(name, state);
+      button.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        openDeviceThread(device, item.id);
+      });
+      parent.appendChild(button);
+    }
+
+    async function openDeviceThread(device, threadId = '') {
+      if (!device?.pathPrefix) return;
+      if (isCurrentDevicePath(device.pathPrefix)) {
+        await selectThread(threadId);
+        return;
+      }
+      const url = new URL(`${location.origin}${device.pathPrefix}/`);
+      if (threadId) url.searchParams.set('thread', threadId);
+      if (relayDeviceContext) url.searchParams.set('token', token || 'relay-authenticated');
+      location.href = url.toString();
+    }
+
     function appendPinnedThreadOption(parent, item) {
       const button = document.createElement('button');
       const icon = document.createElement('span');
@@ -6216,6 +6306,120 @@
       for (const item of sortThreadsByTime(group.items)) appendThreadOption(list, item);
       wrap.append(header, list);
       parent.appendChild(wrap);
+    }
+
+    function appendDeviceThreadSections() {
+      if (!relayDeviceContext) return;
+      const otherDevices = knownDevices.filter(device => device.pathPrefix && !isCurrentDevicePath(device.pathPrefix));
+      if (otherDevices.length) {
+        for (const device of otherDevices) {
+          const section = document.createElement('section');
+          const label = document.createElement('div');
+          const list = document.createElement('div');
+          const cache = deviceThreadCache.get(device.pathPrefix) || {};
+          const threads = Array.isArray(cache.threads) ? cache.threads : [];
+          section.className = 'thread-section';
+          label.className = 'thread-section-label';
+          list.className = 'thread-list';
+          label.textContent = `${deviceDisplayName(device)} · ${threadDeviceLabel(device)}`;
+          if (!threads.length) {
+            const empty = document.createElement('div');
+            empty.className = 'empty-thread-menu';
+            empty.textContent = cache.error || (deviceThreadLoadBusy ? '正在读取这台设备的会话…' : '这台设备暂时没有可显示的会话。');
+            list.appendChild(empty);
+          } else {
+            for (const item of sortThreadsByTime(threads).slice(0, 80)) appendRemoteThreadOption(list, item, device);
+          }
+          section.append(label, list);
+          threadMenu.appendChild(section);
+        }
+      }
+
+      if (deviceThreadError) {
+        const warning = document.createElement('div');
+        warning.className = 'empty-thread-menu';
+        warning.textContent = deviceThreadError;
+        threadMenu.appendChild(warning);
+      }
+    }
+
+    async function loadRelayDevices(options = {}) {
+      if (!relayDeviceContext) return [];
+      const maxAgeMs = Number(options.maxAgeMs || 12000);
+      if (!options.force && knownDevices.length > 1 && Date.now() - deviceThreadLoadedAt < maxAgeMs) return knownDevices;
+      try {
+        const params = new URLSearchParams({ user: relayDeviceContext.user });
+        const response = await fetchWithTimeout(`${location.origin}/devices.json?${params}`, { cache: 'no-store' }, 8000);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.ok || !Array.isArray(data.devices)) throw new Error(data.message || '读取设备列表失败');
+        const currentPath = relayDeviceContext.pathPrefix;
+        const byPath = new Map();
+        for (const device of data.devices) {
+          if (!device?.pathPrefix) continue;
+          byPath.set(device.pathPrefix, {
+            user: device.user || relayDeviceContext.user,
+            device: device.device || device.pathPrefix.split('/').filter(Boolean).pop() || '',
+            displayName: device.displayName || device.device || device.pathPrefix,
+            pathPrefix: device.pathPrefix,
+          });
+        }
+        if (!byPath.has(currentPath)) {
+          byPath.set(currentPath, {
+            user: relayDeviceContext.user,
+            device: relayDeviceContext.device,
+            displayName: relayDeviceContext.device,
+            pathPrefix: currentPath,
+          });
+        }
+        knownDevices = [...byPath.values()].sort((a, b) => {
+          if (a.pathPrefix === currentPath) return -1;
+          if (b.pathPrefix === currentPath) return 1;
+          return deviceDisplayName(a).localeCompare(deviceDisplayName(b), 'zh-CN');
+        });
+        deviceThreadError = '';
+      } catch (error) {
+        deviceThreadError = error.message || '读取设备列表失败';
+      }
+      return knownDevices;
+    }
+
+    async function fetchThreadsForDevice(device, options = {}) {
+      if (!device?.pathPrefix || isCurrentDevicePath(device.pathPrefix)) return;
+      const previous = deviceThreadCache.get(device.pathPrefix);
+      if (!options.force && previous && Date.now() - (previous.loadedAt || 0) < 15000) return;
+      try {
+        const params = new URLSearchParams({ limit: '80', currentAccountOnly: '1', token: 'relay-authenticated' });
+        const response = await fetchWithTimeout(`${location.origin}${device.pathPrefix}/codex/threads?${params}`, { cache: 'no-store' }, 9000);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.ok) throw new Error(data.message || '读取会话失败');
+        deviceThreadCache.set(device.pathPrefix, {
+          threads: Array.isArray(data.threads) ? data.threads : [],
+          loadedAt: Date.now(),
+          error: '',
+        });
+      } catch (error) {
+        deviceThreadCache.set(device.pathPrefix, {
+          threads: previous?.threads || [],
+          loadedAt: Date.now(),
+          error: error.message || '读取这台设备的会话失败',
+        });
+      }
+    }
+
+    async function loadDeviceThreads(options = {}) {
+      if (!relayDeviceContext || deviceThreadLoadBusy) return;
+      deviceThreadLoadBusy = true;
+      try {
+        await loadRelayDevices(options);
+        renderThreadMenuIfVisualChanged();
+        const devices = knownDevices.filter(device => device.pathPrefix && !isCurrentDevicePath(device.pathPrefix));
+        await Promise.all(devices.map(device => fetchThreadsForDevice(device, options)));
+        deviceThreadLoadedAt = Date.now();
+        renderThreadMenuIfVisualChanged();
+      } finally {
+        deviceThreadLoadBusy = false;
+        renderThreadMenuIfVisualChanged();
+      }
     }
 
     function renderThreadMenu() {
@@ -6337,6 +6541,7 @@
         section.append(label, list);
         threadMenu.appendChild(section);
       }
+      appendDeviceThreadSections();
       lastThreadMenuSignature = threadMenuVisualSignature();
       positionThreadMenuCard();
     }
@@ -6461,7 +6666,7 @@
       const current = threadItemById(threadId);
       if (!current || !threadId) return;
       actionThreadId = threadId;
-      if (!options.keepThreadMenu) threadMenu.classList.remove('is-open');
+      if (!options.keepThreadMenu) closeThreadMenu();
       closePermissionMenu();
       closeReasoningMenu();
       closeModelMenu();
@@ -6480,7 +6685,7 @@
     function showRenamePanel() {
       const current = actionThreadItem();
       if (!current) return;
-      threadMenu.classList.remove('is-open');
+      closeThreadMenu();
       threadRenameInput.value = current.name || '';
       threadActionCard.classList.add('is-renaming');
       threadActionCard.style.left = '';
@@ -6643,7 +6848,7 @@
       const isProjectScope = Boolean(current?.isProjectThread && (current.projectPath || current.cwd));
       const newThreadScope = isProjectScope ? 'project' : 'conversation';
       newThreadButton.disabled = true;
-      threadMenu.classList.remove('is-open');
+      closeThreadMenu();
       setWorkingDot(true);
       setNotice(isProjectScope ? '正在当前项目新建线程…' : '正在新建对话线程…', 'ok');
       try {
@@ -6877,7 +7082,7 @@
 
     async function selectThread(threadId) {
       if (!threadId) return;
-      threadMenu.classList.remove('is-open');
+      closeThreadMenu();
       setThreadCompleteNotice(threadId, false);
       if (threadId === selectedThreadId) {
         const desktopSync = syncCodexThread(threadId, { force: true }).catch(() => null);
@@ -7443,7 +7648,7 @@
     }
 
     function openPermissionMenu(options = {}) {
-      threadMenu.classList.remove('is-open');
+      closeThreadMenu();
       closeThreadActionCard();
       closeContextQuickCard();
       closeSettingsCard();
@@ -7515,7 +7720,7 @@
     }
 
     function openReasoningMenu(options = {}) {
-      threadMenu.classList.remove('is-open');
+      closeThreadMenu();
       closeThreadActionCard();
       closeContextQuickCard();
       closeSettingsCard();
@@ -7586,7 +7791,7 @@
     }
 
     function openModelMenu(options = {}) {
-      threadMenu.classList.remove('is-open');
+      closeThreadMenu();
       closeThreadActionCard();
       closeContextQuickCard();
       closeSettingsCard();
@@ -7657,7 +7862,7 @@
     }
 
     function openContextQuickCard(options = {}) {
-      threadMenu.classList.remove('is-open');
+      closeThreadMenu();
       closeThreadActionCard();
       closeSettingsCard();
       closePermissionMenu();
@@ -8219,6 +8424,10 @@
       threadLongPressStart = null;
     }
 
+    function closeThreadMenu() {
+      threadMenu.classList.remove('is-open');
+    }
+
     function clearNativeSelection() {
       try {
         const selection = window.getSelection && window.getSelection();
@@ -8242,7 +8451,7 @@
     function positionThreadMenuCard() {
       if (!threadMenu) return;
       const styles = window.getComputedStyle(threadMenu);
-      if (styles.position !== 'fixed') {
+      if (styles.position !== 'fixed' || styles.transform !== 'none') {
         threadMenu.style.top = '';
         threadMenu.style.maxHeight = '';
         if (threadMenuScrim) {
@@ -8281,6 +8490,7 @@
       threadMenu.classList.toggle('is-open');
       if (willOpen) positionThreadMenuCard();
       loadThreads({ detectTransitions: true, renderMenu: 'ifChanged' }).catch(error => setNotice(error.message || '读取线程失败', 'error'));
+      if (willOpen) loadDeviceThreads({ maxAgeMs: 12000 }).catch(error => setNotice(error.message || '读取设备会话失败', 'error'));
     }
 
     function startThreadLongPress(event) {
@@ -8344,8 +8554,12 @@
     modelMenuCard.addEventListener('pointerdown', event => event.stopPropagation());
     modelMenuCard.addEventListener('touchstart', event => event.stopPropagation(), { passive: true });
     modelMenuCard.addEventListener('click', event => event.stopPropagation());
+    threadMenuScrim.addEventListener('click', event => {
+      event.preventDefault();
+      closeThreadMenu();
+    });
     document.addEventListener('click', event => {
-      if (!threadMenu.contains(event.target) && !threadButton.contains(event.target) && !newThreadButton.contains(event.target) && !settingsButton.contains(event.target) && !permissionBadge.contains(event.target) && !reasoningBadge.contains(event.target) && !modelBadge.contains(event.target)) threadMenu.classList.remove('is-open');
+      if (!threadMenu.contains(event.target) && !threadButton.contains(event.target) && !newThreadButton.contains(event.target) && !settingsButton.contains(event.target) && !permissionBadge.contains(event.target) && !reasoningBadge.contains(event.target) && !modelBadge.contains(event.target)) closeThreadMenu();
       if (!threadActionCard.contains(event.target) && !threadButton.contains(event.target) && !settingsButton.contains(event.target) && !permissionBadge.contains(event.target) && !reasoningBadge.contains(event.target) && !modelBadge.contains(event.target)) closeThreadActionCard();
       if (!contextQuickCard.contains(event.target) && !topStatus.contains(event.target)) closeContextQuickCard();
       if (!settingsCard.contains(event.target) && !settingsButton.contains(event.target)) closeSettingsCard();
