@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-visual" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=overlays-content" />
   <meta name="theme-color" content="#000000" />
   <meta name="application-name" content="Codex mini" />
   <meta name="apple-mobile-web-app-title" content="Codex mini" />
@@ -2924,6 +2924,7 @@
     let keyboardAlignRaf = 0;
     let keyboardFocusStartedAt = 0;
     let keyboardShiftTarget = 0;
+    let keyboardMonitorStartedAt = 0;
     let maxViewportHeight = Math.max(window.innerHeight || 0, window.visualViewport ? window.visualViewport.height : 0);
     let keyboardComposerRevealDone = false;
     let lastTextareaFocusPrepareAt = 0;
@@ -4787,10 +4788,51 @@
       keyboardComposerRevealDone = false;
       keyboardFocusStartedAt = 0;
       keyboardShiftTarget = 0;
+      const viewportHeight = Math.round((window.visualViewport && window.visualViewport.height) || 0);
+      const baselineHeight = Math.round(Math.max(window.innerHeight || 0, document.documentElement.clientHeight || 0, viewportHeight || 0));
+      if (baselineHeight) maxViewportHeight = baselineHeight;
       document.documentElement.style.setProperty('--app-top', '0px');
-      document.documentElement.style.setProperty('--app-height', `${stableViewportHeight()}px`);
+      document.documentElement.style.setProperty('--app-height', `${maxViewportHeight || baselineHeight}px`);
       document.documentElement.style.setProperty('--keyboard-shift', '0px');
       keepLayoutViewportPinned();
+    }
+
+    function visualViewportBottom() {
+      const viewport = window.visualViewport;
+      if (!viewport) return window.innerHeight || document.documentElement.clientHeight || 0;
+      return Math.round((viewport.offsetTop || 0) + (viewport.height || 0));
+    }
+
+    function fallbackKeyboardViewportBottom() {
+      const viewport = window.visualViewport;
+      const viewportHeight = viewport?.height || 0;
+      const visualBottom = visualViewportBottom();
+      const stableHeight = stableViewportHeight();
+      const hasViewportShrink = viewportHeight > 0 && stableHeight - viewportHeight > 80;
+      if (hasViewportShrink) return visualBottom;
+      const focusedRecently = document.activeElement === textarea && keyboardFocusStartedAt && performance.now() - keyboardFocusStartedAt < 1600;
+      if (!focusedRecently) return visualBottom;
+      const estimatedKeyboardHeight = clampNumber(stableHeight * 0.42, 260, 390);
+      return Math.min(visualBottom || stableHeight, stableHeight - estimatedKeyboardHeight);
+    }
+
+    function forceComposerAboveViewport() {
+      if (!composer) return false;
+      const currentShift = currentKeyboardShift();
+      const viewportBottom = fallbackKeyboardViewportBottom();
+      if (!viewportBottom) return false;
+      const desiredGapRaw = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--keyboard-composer-gap'));
+      const desiredGap = Number.isFinite(desiredGapRaw) ? desiredGapRaw : 8;
+      const composerBottomWithoutShift = composer.getBoundingClientRect().bottom + currentShift;
+      const maxShift = Math.max(0, Math.min(stableViewportHeight() * 0.72, 520));
+      const requiredShift = clampNumber(composerBottomWithoutShift - viewportBottom + desiredGap, 0, maxShift);
+      const nextShift = Math.round(requiredShift);
+      if (Math.abs(nextShift - currentShift) < 1) return false;
+      keyboardShiftTarget = nextShift;
+      document.body.classList.toggle('keyboard-open', nextShift > 0 || document.activeElement === textarea);
+      document.documentElement.style.setProperty('--keyboard-shift', `${nextShift}px`);
+      keepLayoutViewportPinned();
+      return true;
     }
 
     function pinLayoutForKeyboardFocus() {
@@ -4862,24 +4904,25 @@
       } else if (!document.body.classList.contains('keyboard-open')) {
         maxViewportHeight = Math.max(maxViewportHeight, baselineHeight);
       }
-      const viewportShrink = viewport ? Math.max(0, maxViewportHeight - viewportHeight) : 0;
+      const stableHeight = Math.max(maxViewportHeight, baselineHeight);
+      const viewportShrink = viewport ? Math.max(0, stableHeight - viewportHeight) : 0;
       const focusAge = focused && keyboardFocusStartedAt ? performance.now() - keyboardFocusStartedAt : Infinity;
       const previousShift = currentKeyboardShift();
-      const keyboardOpen = focused && (viewportShrink > 80 || focusAge < 900);
+      const keyboardOpen = focused && (viewportShrink > 80 || focusAge < 1800 || keyboardMonitorTimer || previousShift > 0 || keyboardShiftTarget > 0);
       if (!keyboardOpen && (previousShift > 0 || keyboardShiftTarget > 0 || document.body.classList.contains('keyboard-open'))) {
         resetKeyboardLayout();
         return false;
       }
       document.body.classList.toggle('keyboard-open', keyboardOpen);
       document.documentElement.style.setProperty('--app-top', '0px');
-      document.documentElement.style.setProperty('--app-height', `${Math.max(maxViewportHeight, viewportHeight)}px`);
+      document.documentElement.style.setProperty('--app-height', `${Math.max(stableHeight, viewportHeight)}px`);
       if (!keyboardOpen || !viewportHeight) {
         resetKeyboardLayout();
         return false;
       }
 
       if (viewportShrink <= 80) {
-        document.documentElement.style.setProperty('--keyboard-shift', `${Math.round(keyboardShiftTarget || previousShift || 0)}px`);
+        forceComposerAboveViewport();
         keepLayoutViewportPinned();
         return true;
       }
@@ -4887,7 +4930,7 @@
       const composerBottomWithoutShift = composer.getBoundingClientRect().bottom + previousShift;
       const desiredGapRaw = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--keyboard-composer-gap'));
       const desiredGap = Number.isFinite(desiredGapRaw) ? desiredGapRaw : 0;
-      const maxReasonableShift = Math.max(220, maxViewportHeight * 0.62);
+      const maxReasonableShift = Math.max(220, stableHeight * 0.72);
       const maxShift = Math.max(0, Math.min(viewportShrink + 24, maxReasonableShift));
       const viewportBottom = isChromeKeyboardBrowser && viewport
         ? Math.round((viewport.offsetTop || 0) + viewportHeight)
@@ -4899,6 +4942,7 @@
       const nextShift = adjustedShift;
       keyboardShiftTarget = Math.round(nextShift);
       document.documentElement.style.setProperty('--keyboard-shift', `${keyboardShiftTarget}px`);
+      forceComposerAboveViewport();
       keepLayoutViewportPinned();
       return true;
     }
@@ -4908,6 +4952,7 @@
       if (keyboardAlignRaf) window.cancelAnimationFrame(keyboardAlignRaf);
       keyboardAlignRaf = requestAnimationFrame(() => {
         keyboardAlignRaf = 0;
+        if (keyboardOpen && document.activeElement === textarea) forceComposerAboveViewport();
         keepLayoutViewportPinned();
         thread.scrollTop = thread.scrollHeight;
         if (keyboardOpen && document.activeElement === textarea) {
@@ -4933,24 +4978,37 @@
     function scheduleKeyboardAlignment() {
       keyboardAlignmentTimers.forEach(timer => window.clearTimeout(timer));
       alignComposerForKeyboard();
-      keyboardAlignmentTimers = [40, 90, 160, 280, 450, 700, 1000, 1300].map(delay => window.setTimeout(alignComposerForKeyboard, delay));
+      keyboardAlignmentTimers = [16, 40, 80, 130, 210, 320, 480, 700, 1000, 1400, 1900, 2400].map(delay => window.setTimeout(alignComposerForKeyboard, delay));
     }
 
     function beginKeyboardAlignment() {
       keyboardComposerRevealDone = false;
       keyboardFocusStartedAt = performance.now();
       pinLayoutForKeyboardFocus();
+      startKeyboardMonitor();
       scheduleKeyboardAlignment();
     }
 
     function startKeyboardMonitor() {
-      // Intentionally empty: let iOS/Safari own keyboard layout.
+      if (keyboardMonitorTimer) window.clearInterval(keyboardMonitorTimer);
+      keyboardMonitorStartedAt = performance.now();
+      keyboardMonitorTimer = window.setInterval(() => {
+        if (document.activeElement !== textarea) {
+          stopKeyboardMonitor();
+          return;
+        }
+        alignComposerForKeyboard();
+        if (performance.now() - keyboardMonitorStartedAt > 1800 && keyboardComposerRevealDone) {
+          stopKeyboardMonitor();
+        }
+      }, 50);
     }
 
     function stopKeyboardMonitor() {
       if (!keyboardMonitorTimer) return;
       window.clearInterval(keyboardMonitorTimer);
       keyboardMonitorTimer = null;
+      keyboardMonitorStartedAt = 0;
     }
 
     function restoreLayoutAfterKeyboard() {
