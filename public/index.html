@@ -121,9 +121,9 @@
     .topbar {
       position: relative;
       z-index: 80;
-      display: flex;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
       align-items: center;
-      justify-content: space-between;
       gap: 12px;
       min-width: 0;
       height: calc(var(--topbar-row-height) + max(0px, calc(env(safe-area-inset-top) - var(--topbar-safe-lift))));
@@ -136,11 +136,11 @@
     }
     .title {
       min-width: 0;
-      flex: 1 1 auto;
+      max-width: 100%;
       display: flex;
       align-items: center;
       gap: 6px;
-      overflow: visible;
+      overflow: hidden;
       font-weight: 760;
       letter-spacing: -.02em;
     }
@@ -346,6 +346,7 @@
     }
     .model-menu-card {
       position: fixed;
+      grid-column: 1 / -1;
       z-index: 120;
       display: none;
       grid-template-columns: repeat(2, minmax(116px, max-content));
@@ -588,7 +589,8 @@
     }
     .thread-button {
       min-width: 0;
-      flex: 1 1 auto;
+      max-width: 100%;
+      flex: 1 1 0;
       overflow: hidden;
       appearance: none;
       border: 0;
@@ -628,7 +630,8 @@
       vector-effect: non-scaling-stroke;
     }
     .thread-name {
-      max-width: min(58vw, 560px);
+      min-width: 0;
+      max-width: 100%;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -746,9 +749,9 @@
       vector-effect: non-scaling-stroke;
     }
     .top-actions {
-      flex: 0 1 min(46vw, 340px);
-      width: min(46vw, 340px);
-      max-width: calc(100vw - 148px);
+      justify-self: end;
+      width: min(max-content, 46vw, 340px);
+      max-width: min(46vw, 340px);
       height: calc(var(--top-control-size) + 8px);
       display: flex;
       align-items: center;
@@ -774,6 +777,7 @@
     .top-actions > [hidden] { display: none !important; }
     .settings-card {
       position: fixed;
+      grid-column: 1 / -1;
       z-index: 122;
       display: none;
       width: min(344px, calc(100vw - 24px));
@@ -1050,6 +1054,7 @@
     .order-button:not(:disabled):active { transform: scale(.94); }
     .approval-sheet {
       position: fixed;
+      grid-column: 1 / -1;
       left: var(--thread-menu-edge-gap);
       right: var(--thread-menu-edge-gap);
       top: calc(max(0px, calc(env(safe-area-inset-top) - var(--topbar-safe-lift))) + var(--topbar-row-height) + var(--thread-menu-edge-gap));
@@ -1190,6 +1195,7 @@
     .thread-menu::-webkit-scrollbar { width: 0; height: 0; display: none; }
     .thread-action-card {
       position: fixed;
+      grid-column: 1 / -1;
       left: 18px;
       top: calc(max(0px, calc(env(safe-area-inset-top) - var(--topbar-safe-lift))) + var(--topbar-row-height) + 7px);
       z-index: 31;
@@ -1597,6 +1603,7 @@
     .context-status.is-unknown { --context-color: rgba(161,161,170,.72); }
     .context-quick-card {
       position: fixed;
+      grid-column: 1 / -1;
       z-index: 32;
       display: none;
       appearance: none;
@@ -2444,13 +2451,11 @@
       .context-status .context-ring { width: calc(var(--top-control-size) - 2.5px); height: calc(var(--top-control-size) - 2.5px); }
       #route-text { line-height: 14px; transform: translateY(.1px); }
       .thread-button { padding-inline: 5px; }
-      .thread-name { max-width: min(48vw, 300px); }
       .new-thread-btn svg { width: 12px; height: 12px; }
       .settings-btn svg { width: 13px; height: 13px; transform: translate(.25px, .45px); }
       .top-actions {
-        flex-basis: min(46vw, 184px);
-        width: min(46vw, 184px);
-        max-width: calc(100vw - 144px);
+        width: min(max-content, 46vw, 184px);
+        max-width: min(46vw, 184px);
         gap: 6px;
         padding-right: 5px;
         margin-right: -5px;
