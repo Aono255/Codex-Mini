@@ -10,6 +10,7 @@ const { URL } = require('url');
 const HOST = process.env.HOST || '127.0.0.1';
 const PORT = Number(process.env.PORT || 18700);
 const CONFIG_PATH = process.env.CODEX_MINI_RELAY_CONFIG || path.join(__dirname, 'devices.example.json');
+const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
 const COOKIE_PREFIX = 'codexMiniRelay';
 const BROWSER_SESSION_TOKEN = 'relay-authenticated';
 const BODY_LIMIT_BYTES = Number(process.env.CODEX_MINI_RELAY_BODY_LIMIT_BYTES || 512 * 1024 * 1024);
@@ -17,6 +18,17 @@ const LOGIN_BODY_LIMIT_BYTES = 64 * 1024;
 const REQUEST_TIMEOUT_MS = Number(process.env.CODEX_MINI_RELAY_REQUEST_TIMEOUT_MS || 300000);
 
 let configCache = { mtimeMs: -1, devices: new Map() };
+
+const mimeTypes = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
+  '.svg': 'image/svg+xml; charset=utf-8',
+  '.png': 'image/png',
+  '.ico': 'image/x-icon',
+};
 
 function json(res, status, data) {
   const body = JSON.stringify(data);
@@ -391,6 +403,45 @@ function proxyRequest(req, res, url, device, relayCookie) {
   req.on('error', error => upstreamReq.destroy(error));
 }
 
+function serveDeviceStatic(req, res, url, device, relayCookie) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return false;
+
+  let pathname = decodeURIComponent(url.pathname.slice(device.pathPrefix.length) || '/');
+  if (!pathname.startsWith('/')) pathname = `/${pathname}`;
+  if (pathname === '/') pathname = '/index.html';
+
+  const filePath = path.normalize(path.join(PUBLIC_DIR, pathname));
+  const relative = path.relative(PUBLIC_DIR, filePath);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' });
+    res.end('Forbidden');
+    return true;
+  }
+
+  let stat;
+  try {
+    stat = fs.statSync(filePath);
+  } catch {
+    return false;
+  }
+  if (!stat.isFile()) return false;
+
+  const ext = path.extname(filePath);
+  const headers = {
+    'content-type': mimeTypes[ext] || 'application/octet-stream',
+    'cache-control': ext === '.html' ? 'no-store' : 'public, max-age=3600',
+    'content-length': stat.size,
+    'set-cookie': relayCookie,
+  };
+  res.writeHead(200, headers);
+  if (req.method === 'HEAD') {
+    res.end();
+    return true;
+  }
+  fs.createReadStream(filePath).pipe(res);
+  return true;
+}
+
 function handleRelay(req, res) {
   let url;
   try {
@@ -418,6 +469,7 @@ function handleRelay(req, res) {
   if (url.pathname === device.pathPrefix) {
     return redirect(res, `${device.pathPrefix}/${stripRelayToken(url.searchParams)}`, { 'set-cookie': setCookie });
   }
+  if (serveDeviceStatic(req, res, url, device, setCookie)) return;
   proxyRequest(req, res, url, device, setCookie);
 }
 
