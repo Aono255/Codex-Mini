@@ -61,6 +61,7 @@
       --notice-top-gap: 8px;
       --panel: #171717;
       --panel-2: #242424;
+      --composer-bg: #202020;
       --text: #f4f4f5;
       --muted: #a1a1aa;
       --faint: #71717a;
@@ -129,7 +130,7 @@
       height: calc(var(--topbar-row-height) + max(0px, calc(env(safe-area-inset-top) - var(--topbar-safe-lift))));
       padding: max(0px, calc(env(safe-area-inset-top) - var(--topbar-safe-lift))) 14px 0;
       border-bottom: 1px solid rgba(255,255,255,.22);
-      background: var(--topbar-bg);
+      background: var(--composer-bg);
       -webkit-user-select: none;
       user-select: none;
       -webkit-touch-callout: none;
@@ -375,6 +376,7 @@
       display: none;
       grid-template-columns: minmax(0, 1fr);
       gap: 8px;
+      box-sizing: border-box;
       min-width: min(252px, calc(100vw - 24px));
       width: min(292px, calc(100vw - 24px));
       max-width: calc(100vw - 24px);
@@ -383,8 +385,12 @@
       border: 1px solid rgba(255,255,255,.12);
       background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02)), rgba(20,22,27,.98);
       box-shadow: 0 18px 42px rgba(0,0,0,.36);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
       backdrop-filter: blur(18px);
       -webkit-backdrop-filter: blur(18px);
+      touch-action: pan-y;
     }
     .model-menu-card.is-open { display: grid; }
     .model-menu-item {
@@ -793,8 +799,8 @@
     }
     .top-actions {
       justify-self: end;
-      width: min(max-content, 46vw, 340px);
-      max-width: min(46vw, 340px);
+      width: min(max-content, 32vw, 190px);
+      max-width: min(32vw, 190px);
       height: calc(var(--top-control-size) + 8px);
       display: flex;
       align-items: center;
@@ -818,6 +824,26 @@
     .top-actions.is-fit { justify-content: flex-end; }
     .top-actions > .is-hidden-by-settings,
     .top-actions > [hidden] { display: none !important; }
+    .composer-setting-controls {
+      grid-column: 2 / 3;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+      min-width: 0;
+      max-width: 100%;
+      height: 28px;
+      padding: 0 1px 1px 0;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-x;
+    }
+    .composer-setting-controls::-webkit-scrollbar { display: none; }
+    .composer-setting-controls > * { flex: 0 0 auto; }
+    .composer-setting-controls > .is-hidden-by-settings,
+    .composer-setting-controls > [hidden] { display: none !important; }
     .settings-card {
       position: fixed;
       grid-column: 1 / -1;
@@ -1936,11 +1962,14 @@
       font-size: 15px;
       line-height: 1.66;
     }
-    .process-tool {
-      flex: 0 0 auto;
-      min-width: 0;
-      width: fit-content;
-      max-width: 100%;
+	    .process-tool {
+	      flex: 0 0 auto;
+	      display: inline-flex;
+	      align-items: center;
+	      gap: 5px;
+	      min-width: 0;
+	      width: fit-content;
+	      max-width: 100%;
       padding: 4px 8px;
       border: 1px solid rgba(255,255,255,.07);
       border-radius: 999px;
@@ -1950,8 +1979,25 @@
       line-height: 1.2;
       white-space: nowrap;
       overflow: hidden;
-      text-overflow: ellipsis;
-    }
+	      text-overflow: ellipsis;
+	    }
+	    .process-tool::before {
+	      content: "";
+	      width: 6px;
+	      height: 6px;
+	      border-radius: 999px;
+	      background: rgba(244,244,245,.38);
+	      flex: 0 0 auto;
+	    }
+	    .process-tool.is-running::before {
+	      background: #ffb45f;
+	      box-shadow: 0 0 0 3px rgba(255,180,95,.10);
+	    }
+	    .process-tool.is-complete::before { background: #7bd88f; }
+	    .process-tool.type-edit { color: #ffbd8a; border-color: rgba(255,155,98,.14); background: rgba(255,155,98,.06); }
+	    .process-tool.type-read,
+	    .process-tool.type-search { color: rgba(177,213,255,.86); border-color: rgba(96,165,250,.14); background: rgba(96,165,250,.055); }
+	    .process-tool.type-check { color: rgba(123,216,143,.88); border-color: rgba(123,216,143,.14); background: rgba(123,216,143,.055); }
 
     details.process {
       margin-top: 10px;
@@ -1996,6 +2042,10 @@
     body.keyboard-open .thread,
     body.keyboard-open .composer-shell {
       transition: none;
+    }
+    body.slash-menu-open .composer-shell {
+      z-index: 130;
+      overflow: visible;
     }
     @media (min-width: 900px) and (min-height: 650px) {
       .thread {
@@ -2047,26 +2097,25 @@
       font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace;
       font-variant-numeric: tabular-nums;
     }
-    .queued-send-bar {
-      display: none;
-      align-items: center;
-      gap: 8px;
-      width: 100%;
-      max-width: 100%;
-      min-width: 0;
-      height: 38px;
-      margin: 0 0 8px;
-      padding: 0 13px;
-      border: 1px solid rgba(255,255,255,.10);
-      border-radius: 18px;
-      background: rgba(32,32,32,.96);
-      box-shadow: 0 10px 34px rgba(0,0,0,.20);
-      color: var(--muted);
-      font-size: 14px;
-      line-height: 1;
-      overflow: hidden;
-      white-space: nowrap;
-    }
+	    .queued-send-bar {
+	      display: none;
+	      align-items: flex-start;
+	      gap: 8px;
+	      width: 100%;
+	      max-width: 100%;
+	      min-width: 0;
+	      min-height: 38px;
+	      margin: 0 0 8px;
+	      padding: 6px 8px 6px 12px;
+	      border: 1px solid rgba(255,255,255,.10);
+	      border-radius: 18px;
+	      background: rgba(32,32,32,.96);
+	      box-shadow: 0 10px 34px rgba(0,0,0,.20);
+	      color: var(--muted);
+	      font-size: 14px;
+	      line-height: 1;
+	      overflow: hidden;
+	    }
     .queued-send-bar.is-visible { display: flex; }
     .queued-send-icon {
       flex: 0 0 auto;
@@ -2088,23 +2137,83 @@
       stroke-linejoin: round;
       vector-effect: non-scaling-stroke;
     }
-    .queued-send-label {
-      flex: 0 0 auto;
-      color: #ff9b62;
-      font-weight: 760;
-      white-space: nowrap;
-    }
-    .queued-send-bar.is-sending .queued-send-label { color: #ffd28a; }
-    .queued-send-text {
-      flex: 1 1 0;
-      min-width: 0;
-      max-width: 100%;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      color: rgba(244,244,245,.78);
-      font-weight: 560;
-    }
+	    .queued-send-label {
+	      flex: 0 0 auto;
+	      padding-top: 6px;
+	      color: #ff9b62;
+	      font-weight: 760;
+	      white-space: nowrap;
+	    }
+	    .queued-send-bar.is-sending .queued-send-label { color: #ffd28a; }
+	    .queued-send-list {
+	      flex: 1 1 0;
+	      display: flex;
+	      align-items: center;
+	      gap: 6px;
+	      min-width: 0;
+	      max-width: 100%;
+	      overflow-x: auto;
+	      overflow-y: hidden;
+	      overscroll-behavior-x: contain;
+	      -webkit-overflow-scrolling: touch;
+	      scrollbar-width: none;
+	      touch-action: pan-x;
+	    }
+	    .queued-send-list::-webkit-scrollbar { display: none; }
+	    .queued-send-item {
+	      flex: 0 0 auto;
+	      display: flex;
+	      align-items: center;
+	      gap: 6px;
+	      min-width: 0;
+	      max-width: min(420px, 72vw);
+	      height: 26px;
+	      padding: 2px 3px 2px 8px;
+	      border: 1px solid rgba(255,255,255,.08);
+	      border-radius: 13px;
+	      background: rgba(255,255,255,.045);
+	      color: rgba(244,244,245,.78);
+	    }
+	    .queued-send-item.is-guiding { opacity: .72; }
+	    .queued-send-item-text {
+	      flex: 1 1 auto;
+	      min-width: 34px;
+	      overflow: hidden;
+	      text-overflow: ellipsis;
+	      white-space: nowrap;
+	      font-size: 12px;
+	      font-weight: 560;
+	      line-height: 1.2;
+	    }
+	    .queued-send-state {
+	      flex: 0 0 auto;
+	      color: #ffd28a;
+	      font-size: 11px;
+	      font-weight: 760;
+	      white-space: nowrap;
+	    }
+	    .queued-send-item.is-queued .queued-send-state { color: #ff9b62; }
+	    .queued-send-item.is-guided .queued-send-state { color: #7bd88f; }
+	    .queued-send-guide {
+	      flex: 0 0 auto;
+	      min-width: 42px;
+	      height: 22px;
+	      border: 0;
+	      border-radius: 11px;
+	      padding: 0 9px;
+	      background: rgba(255,155,98,.18);
+	      color: #ffb07b;
+	      font-size: 12px;
+	      font-weight: 780;
+	      line-height: 22px;
+	      white-space: nowrap;
+	      touch-action: manipulation;
+	    }
+	    .queued-send-guide:not(:disabled):active { transform: translateY(1px); background: rgba(255,155,98,.26); }
+	    .queued-send-guide:disabled {
+	      color: rgba(244,244,245,.34);
+	      background: rgba(255,255,255,.055);
+	    }
     .attachment-tray {
       display: none;
       gap: 8px;
@@ -2174,7 +2283,8 @@
       position: relative;
       z-index: 2;
       display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-columns: auto minmax(0, 1fr) auto auto;
+      grid-template-rows: auto auto;
       align-items: end;
       gap: 5px;
       width: 100%;
@@ -2183,7 +2293,7 @@
       padding: 9px;
       border: 1px solid var(--line);
       border-radius: 24px;
-      background: #202020;
+      background: var(--composer-bg);
       box-shadow: none;
     }
     .composer.is-running {
@@ -2279,7 +2389,7 @@
       border-color: transparent;
       box-shadow: none;
     }
-    body.color-flow-on .composer > * {
+    body.color-flow-on .composer > :not(.slash-menu) {
       position: relative;
       z-index: 1;
     }
@@ -2434,6 +2544,8 @@
       display: block;
     }
     .send-btn {
+      grid-column: 4;
+      grid-row: 1 / 3;
       left: -1px;
       background: var(--accent);
       color: #111;
@@ -2441,7 +2553,21 @@
       font-weight: 900;
     }
     .send-btn:disabled { opacity: .45; cursor: wait; }
+    .stop-btn {
+      grid-column: 4;
+      grid-row: 1 / 3;
+    }
+    .icon-btn {
+      grid-column: 1;
+      grid-row: 1 / 3;
+    }
+    .guide-btn {
+      grid-column: 3;
+      grid-row: 1 / 3;
+    }
     textarea {
+      grid-column: 2 / 3;
+      grid-row: 1;
       width: 100%;
       max-height: 150px;
       min-height: 38px;
@@ -2458,32 +2584,195 @@
       overscroll-behavior: contain;
     }
     textarea::placeholder { color: var(--faint); }
+    .slash-menu {
+      position: fixed;
+      left: auto;
+      right: auto;
+      top: auto;
+      bottom: auto;
+      z-index: 145;
+      display: grid;
+      gap: 5px;
+      box-sizing: border-box;
+      width: min(420px, calc(100vw - 20px));
+      max-width: calc(100vw - 20px);
+      max-height: min(290px, 42vh);
+      padding: 7px;
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 17px;
+      background: rgba(27,27,30,.98);
+      box-shadow: 0 18px 52px rgba(0,0,0,.46);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      touch-action: pan-y;
+    }
+    .slash-menu[hidden] { display: none; }
+    .slash-item {
+      min-width: 0;
+      min-height: 43px;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border: 0;
+      border-radius: 12px;
+      background: transparent;
+      color: var(--text);
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+      touch-action: pan-y;
+    }
+    .slash-item.is-active,
+    .slash-item:active {
+      background: rgba(255,255,255,.08);
+    }
+    .slash-item-token {
+      min-width: 58px;
+      height: 27px;
+      display: inline-grid;
+      place-items: center;
+      padding: 0 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(158,203,255,.24);
+      background: rgba(158,203,255,.10);
+      color: #9ecbff;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      font-weight: 780;
+      line-height: 1;
+    }
+    .slash-item-body {
+      min-width: 0;
+      display: grid;
+      gap: 2px;
+    }
+    .slash-item-title {
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 780;
+      line-height: 1.2;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .slash-item-desc {
+      color: var(--faint);
+      font-size: 11.5px;
+      font-weight: 620;
+      line-height: 1.25;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .mini-status { display: none; }
 
+    .markdown-body {
+      color: rgba(244,244,245,.95);
+      font-size: 15.5px;
+      line-height: 1.68;
+    }
     .markdown-body > *:first-child { margin-top: 0; }
     .markdown-body > *:last-child { margin-bottom: 0; }
-    .markdown-body p { margin: 0 0 .45em; }
-    .markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4, .markdown-body h5, .markdown-body h6 { margin: .9em 0 .45em; line-height: 1.2; }
-    .markdown-body h1 { font-size: 1.35em; }
-    .markdown-body h2 { font-size: 1.18em; }
-    .markdown-body h3 { font-size: 1.06em; }
-    .markdown-body h4 { font-size: 1em; }
-    .markdown-body h5 { font-size: .96em; }
-    .markdown-body h6 { font-size: .92em; }
-    .markdown-body ul, .markdown-body ol { margin: .35em 0 .6em; padding-left: 1.35em; }
-    .markdown-body li { margin: .12em 0; }
-    .markdown-body blockquote { margin: .55em 0; padding-left: .9em; border-left: 3px solid #3f3f46; color: var(--muted); }
-    .markdown-body pre { margin: .65em 0; padding: .75em .85em; border-radius: 12px; background: var(--panel-2); overflow: auto; white-space: pre-wrap; }
-    .markdown-body code { border-radius: 6px; padding: .08em .32em; background: var(--panel-2); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .9em; }
-    .markdown-body pre code { padding: 0; background: transparent; }
-    .markdown-body .table-scroll { width: 100%; margin: .65em 0; overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 12px; border: 1px solid rgba(63,63,70,.78); }
-    .markdown-body table { width: 100%; min-width: 420px; border-collapse: collapse; background: rgba(24,24,27,.55); font-size: .94em; }
-    .markdown-body th, .markdown-body td { padding: .48em .7em; border: 1px solid rgba(63,63,70,.78); vertical-align: top; text-align: left; }
-    .markdown-body th { background: rgba(39,39,42,.88); color: var(--text); font-weight: 750; }
-    .markdown-body tr:nth-child(even) td { background: rgba(39,39,42,.34); }
+    .markdown-body p { margin: 0 0 .72em; }
+    .markdown-body h1,
+    .markdown-body h2,
+    .markdown-body h3,
+    .markdown-body h4,
+    .markdown-body h5,
+    .markdown-body h6 {
+      margin: 1.08em 0 .52em;
+      color: #fafafa;
+      line-height: 1.24;
+      font-weight: 820;
+    }
+    .markdown-body h1 { font-size: 1.42em; letter-spacing: 0; }
+    .markdown-body h2 { font-size: 1.24em; letter-spacing: 0; }
+    .markdown-body h3 { font-size: 1.11em; }
+    .markdown-body h4 { font-size: 1.02em; }
+    .markdown-body h5 { font-size: .98em; }
+    .markdown-body h6 { font-size: .94em; color: var(--muted); }
+    .markdown-body ul,
+    .markdown-body ol {
+      margin: .44em 0 .78em;
+      padding-left: 1.28em;
+    }
+    .markdown-body li { margin: .2em 0; padding-left: .14em; }
+    .markdown-body li::marker { color: rgba(158,203,255,.84); }
+    .markdown-body blockquote {
+      margin: .82em 0;
+      padding: .2em .95em;
+      border-left: 3px solid rgba(158,203,255,.48);
+      border-radius: 0 12px 12px 0;
+      background: rgba(158,203,255,.065);
+      color: rgba(244,244,245,.82);
+    }
+    .markdown-body pre {
+      margin: .9em 0;
+      padding: 12px 13px;
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 14px;
+      background: #151515;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+      overflow: auto;
+      white-space: pre;
+      -webkit-overflow-scrolling: touch;
+    }
+    .markdown-body code {
+      border-radius: 6px;
+      padding: .12em .36em;
+      background: rgba(255,255,255,.075);
+      color: #f7f7f7;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: .9em;
+    }
+    .markdown-body pre code {
+      padding: 0;
+      background: transparent;
+      color: #f0f0f0;
+      font-size: 12.5px;
+      line-height: 1.55;
+    }
+    .markdown-body .table-scroll {
+      width: 100%;
+      margin: .9em 0;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.025);
+    }
+    .markdown-body table {
+      width: 100%;
+      min-width: 420px;
+      border-collapse: collapse;
+      background: transparent;
+      font-size: .93em;
+    }
+    .markdown-body th,
+    .markdown-body td {
+      padding: .62em .78em;
+      border: 1px solid rgba(255,255,255,.09);
+      vertical-align: top;
+      text-align: left;
+    }
+    .markdown-body th {
+      background: rgba(255,255,255,.075);
+      color: #fafafa;
+      font-weight: 780;
+    }
+    .markdown-body tr:nth-child(even) td { background: rgba(255,255,255,.035); }
     .markdown-body .align-center { text-align: center; }
     .markdown-body .align-right { text-align: right; }
-    .markdown-body a { color: #9ecbff; }
+    .markdown-body a {
+      color: #9ecbff;
+      text-decoration: none;
+      border-bottom: 1px solid rgba(158,203,255,.34);
+    }
     .memory-citation-card {
       margin: .85em 0 .1em;
       border: 1px solid rgba(135, 164, 255, .20);
@@ -2580,8 +2869,8 @@
       .new-thread-btn svg { width: 12px; height: 12px; }
       .settings-btn svg { width: 13px; height: 13px; transform: translate(.25px, .45px); }
       .top-actions {
-        width: min(max-content, 46vw, 184px);
-        max-width: min(46vw, 184px);
+        width: min(max-content, 34vw, 132px);
+        max-width: min(34vw, 132px);
         gap: 6px;
         padding-right: 5px;
         margin-right: -5px;
@@ -2596,6 +2885,7 @@
         padding-right: max(var(--thread-menu-edge-gap), calc((100vw - 520px) / 2));
       }
       .composer { border-radius: 29px; }
+      .composer-setting-controls { gap: 5px; }
       .composer-signature { font-size: 18.5px; }
     }
 
@@ -2650,8 +2940,16 @@
     .theme-light .reasoning-menu-card { border-color: rgba(0,0,0,.13); background: rgba(252,252,253,.97); }
     .theme-light .permission-menu-card { border-color: rgba(0,0,0,.13); background: linear-gradient(180deg, rgba(0,0,0,.02), rgba(0,0,0,0)), rgba(252,252,253,.98); box-shadow: 0 20px 52px rgba(31,35,40,.18), inset 0 1px 0 rgba(255,255,255,.6); }
     .theme-light .model-menu-card { border-color: rgba(23,122,76,.26); background: linear-gradient(rgba(23,122,76,.05), rgba(23,122,76,.05)), #f2faf5; box-shadow: 0 18px 42px rgba(31,35,40,.16); }
+    .theme-light .slash-menu { border-color: rgba(0,0,0,.12); background: rgba(252,252,253,.98); box-shadow: 0 18px 42px rgba(31,35,40,.16); }
+    .theme-light .slash-item.is-active,
+    .theme-light .slash-item:active { background: rgba(0,0,0,.055); }
+    .theme-light .slash-item-token { border-color: rgba(31,111,208,.20); background: rgba(31,111,208,.08); color: #155fb8; }
     .theme-light .model-menu-item.is-current { box-shadow: inset 0 0 0 1px rgba(0,0,0,.06); }
-    .theme-light .queued-send-bar { border-color: rgba(0,0,0,.10); background: rgba(248,248,250,.97); box-shadow: 0 10px 34px rgba(31,35,40,.14); }
+	    .theme-light .queued-send-bar { border-color: rgba(0,0,0,.10); background: rgba(248,248,250,.97); box-shadow: 0 10px 34px rgba(31,35,40,.14); }
+	    .theme-light .queued-send-item { border-color: rgba(0,0,0,.08); background: rgba(0,0,0,.035); color: rgba(28,28,30,.78); }
+	    .theme-light .queued-send-guide { background: rgba(176,95,22,.12); color: #9a5211; }
+	    .theme-light .queued-send-guide:not(:disabled):active { background: rgba(176,95,22,.19); }
+	    .theme-light .queued-send-guide:disabled { color: rgba(28,28,30,.34); background: rgba(0,0,0,.055); }
     .theme-light .notice-pill { border-color: rgba(23,122,76,.26); background: rgba(232,247,239,.95); box-shadow: 0 10px 34px rgba(31,35,40,.12); }
     .theme-light .thread-section + .thread-section { border-top-color: rgba(0,0,0,.08); }
     .theme-light .project-header:hover,
@@ -2661,12 +2959,30 @@
     .theme-light .thread-option-spinner { border-color: rgba(0,0,0,.18); }
     .theme-light .bubble .file-attachment-preview { border-color: rgba(0,0,0,.11); background: rgba(0,0,0,.045); }
     .theme-light .bubble a.file-attachment-preview:active { background: rgba(0,0,0,.08); }
-    .theme-light .process-tool { border-color: rgba(0,0,0,.08); background: rgba(0,0,0,.035); }
+	    .theme-light .process-tool { border-color: rgba(0,0,0,.08); background: rgba(0,0,0,.035); }
+	    .theme-light .process-tool::before { background: rgba(28,28,30,.38); }
+	    .theme-light .process-tool.is-running::before { background: #b05f16; box-shadow: 0 0 0 3px rgba(176,95,22,.10); }
+	    .theme-light .process-tool.is-complete::before { background: #177a4c; }
+	    .theme-light .process-tool.type-edit { color: #9a5211; border-color: rgba(176,95,22,.14); background: rgba(176,95,22,.065); }
+	    .theme-light .process-tool.type-read,
+	    .theme-light .process-tool.type-search { color: #155fb8; border-color: rgba(31,111,208,.14); background: rgba(31,111,208,.065); }
+	    .theme-light .process-tool.type-check { color: #177a4c; border-color: rgba(23,122,76,.14); background: rgba(23,122,76,.065); }
     .theme-light .steps li { border-bottom-color: rgba(0,0,0,.07); }
     .theme-light .message.user .bubble.is-copyable { -webkit-tap-highlight-color: rgba(0,0,0,.10); }
     .theme-light .markdown-body .table-scroll { border-color: rgba(0,0,0,.13); }
+    .theme-light .markdown-body { color: rgba(28,28,30,.92); }
+    .theme-light .markdown-body h1,
+    .theme-light .markdown-body h2,
+    .theme-light .markdown-body h3,
+    .theme-light .markdown-body h4,
+    .theme-light .markdown-body h5 { color: rgba(28,28,30,.96); }
+    .theme-light .markdown-body li::marker { color: #1f6fd0; }
+    .theme-light .markdown-body blockquote { border-left-color: rgba(31,111,208,.34); background: rgba(31,111,208,.065); color: rgba(28,28,30,.76); }
+    .theme-light .markdown-body code { background: rgba(0,0,0,.065); color: rgba(28,28,30,.94); }
+    .theme-light .markdown-body pre { border-color: rgba(0,0,0,.10); background: rgba(247,247,249,.98); }
+    .theme-light .markdown-body pre code { color: rgba(28,28,30,.92); }
     .theme-light .markdown-body table { background: rgba(0,0,0,.02); }
-    .theme-light .markdown-body th { background: rgba(0,0,0,.06); }
+    .theme-light .markdown-body th { background: rgba(0,0,0,.06); color: rgba(28,28,30,.95); }
     .theme-light .markdown-body th, .theme-light .markdown-body td { border-color: rgba(0,0,0,.13); }
     .theme-light .markdown-body tr:nth-child(even) td { background: rgba(0,0,0,.025); }
     .theme-light .markdown-body a { color: #155fb8; }
@@ -2720,11 +3036,13 @@
     .theme-light body.color-flow-on .icon-btn,
     .theme-light body.color-flow-on .guide-btn { background: linear-gradient(92deg, rgba(28,28,30,.72) 0%, rgba(23,122,76,.82) 100%); -webkit-background-clip: text; background-clip: text; }
     .theme-light body.color-flow-on .thread-menu { background: linear-gradient(rgba(252,252,253,.98), rgba(252,252,253,.98)); }
-    .theme-light .composer { background: #ffffff; border-color: rgba(0,0,0,.12); box-shadow: 0 6px 22px rgba(31,35,40,.08); }
+    .theme-light .composer { --composer-bg: #ffffff; background: var(--composer-bg); border-color: rgba(0,0,0,.12); box-shadow: 0 6px 22px rgba(31,35,40,.08); }
     .theme-light .permission-menu-item-desc { color: rgba(28,28,30,.56); }
     .theme-light .approval-content { color: rgba(28,28,30,.92); }
     .theme-light .thread-option-spinner { border-top-color: rgba(28,28,30,.85); }
-    .theme-light .queued-send-text { color: rgba(28,28,30,.78); }
+	    .theme-light .queued-send-state { color: #9a6a12; }
+	    .theme-light .queued-send-item.is-queued .queued-send-state { color: #b05f16; }
+	    .theme-light .queued-send-item.is-guided .queued-send-state { color: #177a4c; }
     .theme-light body.signature-plain .composer-signature { color: rgba(28,28,30,.62); }
     .theme-light .settings-switch.is-on { background: linear-gradient(92deg, rgba(31,111,208,.78), rgba(23,138,84,.82), rgba(176,106,20,.66)); }
     .theme-light .settings-btn { border-color: rgba(0,0,0,.14); background: rgba(0,0,0,.05); color: rgba(28,28,30,.62); }
@@ -2744,16 +3062,9 @@
         <button class="thread-button" id="thread-button" type="button"><span class="thread-current-pin" id="thread-current-pin" aria-hidden="true"></span><span class="thread-name" id="thread-name">选择线程</span></button>
       </div>
       <div class="top-actions">
-        <div class="context-status is-unknown mode-ring" id="top-status" role="button" tabindex="0" aria-live="polite" aria-label="当前上下文用量"><span class="context-text"><span class="context-percent">--</span></span><span class="context-ring" aria-hidden="true"></span></div>
         <button class="new-thread-btn" id="new-thread" type="button" title="新建线程" aria-label="新建线程">
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9"/></svg>
         </button>
-        <button class="permission-badge is-unknown" id="permission-badge" type="button" title="当前权限" aria-label="当前权限">
-          <svg id="permission-icon" viewBox="0 0 24 24" aria-hidden="true"><g transform="translate(1 -0.75)"><path d="M18 12V8.5a2 2 0 0 0-4 0V12"/><path d="M14 11V5.5a2 2 0 0 0-4 0V12"/><path d="M10 12V6.5a2 2 0 0 0-4 0V14"/><path d="M6 14v-1.5a2 2 0 1 0-4 0V14a8 8 0 0 0 8 8h2a6 6 0 0 0 6-6v-4"/></g></svg>
-          <span id="permission-text" hidden>--</span>
-        </button>
-        <button class="reasoning-badge is-unknown" id="reasoning-badge" type="button" title="当前推理模式" aria-label="当前推理模式"><span id="reasoning-text">--</span></button>
-        <button class="model-badge is-unknown" id="model-badge" type="button" title="当前模型" aria-label="当前模型"><span id="model-text">--</span></button>
         <button class="route-badge" id="route-badge" type="button" title="当前线路：本地" aria-label="当前线路：本地">
           <svg class="route-icon" id="route-icon" viewBox="0 0 24 24" aria-hidden="true"></svg>
           <span id="route-text">本地</span>
@@ -2775,7 +3086,7 @@
         </div>
         <div class="settings-page is-active" data-settings-page="root">
           <button class="settings-nav-row" type="button" data-settings-page-target="top-controls">
-            <span class="settings-row-text"><span class="settings-label">右上角胶囊</span><span class="settings-subtitle">显示开关和排列顺序</span></span>
+            <span class="settings-row-text"><span class="settings-label">顶部按钮</span><span class="settings-subtitle">新建线程和线路按钮的显示与顺序</span></span>
             <span class="settings-chevron" aria-hidden="true">›</span>
           </button>
           <button class="settings-nav-row" type="button" data-settings-page-target="thread-list">
@@ -2792,7 +3103,7 @@
           </button>
         </div>
         <div class="settings-page" data-settings-page="top-controls">
-          <div class="settings-hint">6 个胶囊都可以自己选择显示或隐藏，也可以用箭头调整顺序</div>
+          <div class="settings-hint">这里管理顶栏右侧按钮。上下文用量、权限、推理强度和模型已放到输入框内。</div>
           <div class="top-control-settings-list" id="top-control-settings-list"></div>
         </div>
         <div class="settings-page" data-settings-page="thread-list">
@@ -2884,14 +3195,23 @@
       <div class="queued-send-bar" id="queued-send" role="status" aria-live="polite">
         <span class="queued-send-icon" aria-hidden="true">
           <svg viewBox="0 0 20 20"><path d="M4.5 4.5v4.75c0 3 1.75 4.75 4.75 4.75h6.25"/><path d="M12.25 10.75 15.5 14l-3.25 3.25"/></svg>
-        </span>
-        <span class="queued-send-label" id="queued-send-label">待发送</span>
-        <span class="queued-send-text" id="queued-send-text"></span>
-      </div>
+	        </span>
+	        <span class="queued-send-label" id="queued-send-label">待发送</span>
+	        <span class="queued-send-list" id="queued-send-list" aria-label="待发送队列"></span>
+	      </div>
       <form class="composer" id="composer">
         <button class="icon-btn" id="attach" type="button" title="添加照片或附件" aria-label="添加照片或附件">＋</button>
         <input class="file-input" id="file-input" type="file" multiple />
         <textarea id="text" rows="1" autocomplete="off" autocapitalize="sentences" spellcheck="false" placeholder="发消息给 Codex Mini"></textarea>
+        <div class="composer-setting-controls" aria-label="当前 Codex 设置">
+          <div class="context-status is-unknown mode-ring" id="top-status" role="button" tabindex="0" aria-live="polite" aria-label="当前上下文用量"><span class="context-text"><span class="context-percent">--</span></span><span class="context-ring" aria-hidden="true"></span></div>
+          <button class="permission-badge is-unknown" id="permission-badge" type="button" title="当前权限" aria-label="当前权限">
+            <svg id="permission-icon" viewBox="0 0 24 24" aria-hidden="true"><g transform="translate(1 -0.75)"><path d="M18 12V8.5a2 2 0 0 0-4 0V12"/><path d="M14 11V5.5a2 2 0 0 0-4 0V12"/><path d="M10 12V6.5a2 2 0 0 0-4 0V14"/><path d="M6 14v-1.5a2 2 0 1 0-4 0V14a8 8 0 0 0 8 8h2a6 6 0 0 0 6-6v-4"/></g></svg>
+            <span id="permission-text" hidden>--</span>
+          </button>
+          <button class="reasoning-badge is-unknown" id="reasoning-badge" type="button" title="当前推理模式" aria-label="当前推理模式"><span id="reasoning-text">--</span></button>
+          <button class="model-badge is-unknown" id="model-badge" type="button" title="当前模型" aria-label="当前模型"><span id="model-text">--</span></button>
+        </div>
         <button class="guide-btn" id="guide-send" type="button" title="发送引导消息" aria-label="发送引导消息">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3"/><path d="M12 18v3"/><path d="M4.22 5.64 6.34 7.76"/><path d="M17.66 16.24l2.12 2.12"/><path d="M3 12h3"/><path d="M18 12h3"/><path d="M4.22 18.36l2.12-2.12"/><path d="M17.66 7.76l2.12-2.12"/><path d="m9 12 2 2 4-4"/></svg>
         </button>
@@ -2900,6 +3220,7 @@
       </form>
       <div class="composer-signature" aria-hidden="true">Codex Mini By Coming Rain.</div>
     </footer>
+    <div class="slash-menu" id="slash-menu" role="listbox" aria-label="Slash 命令" hidden></div>
   </div>
 
   <script>
@@ -2916,10 +3237,11 @@
     const attachButton = document.getElementById('attach');
     const fileInput = document.getElementById('file-input');
     const attachmentTray = document.getElementById('attachment-tray');
+    const slashMenu = document.getElementById('slash-menu');
     const notice = document.getElementById('notice');
-    const queuedSend = document.getElementById('queued-send');
-    const queuedSendLabel = document.getElementById('queued-send-label');
-    const queuedSendText = document.getElementById('queued-send-text');
+	    const queuedSend = document.getElementById('queued-send');
+	    const queuedSendLabel = document.getElementById('queued-send-label');
+	    const queuedSendList = document.getElementById('queued-send-list');
     const topStatus = document.getElementById('top-status');
     const contextQuickCard = document.getElementById('context-quick-card');
     const contextQuickCompact = contextQuickCard;
@@ -3129,10 +3451,11 @@
     let approvalPromptThreadId = '';
     let currentReasoningMode = null;
     let switchingReasoningMode = false;
-    let currentModelInfo = null;
-    let switchingModel = false;
-    let sendingGuidance = false;
-    let routeBadgeCompact = false;
+	    let currentModelInfo = null;
+	    let switchingModel = false;
+	    let sendingGuidance = false;
+	    let appendedGuidanceMessageFingerprints = new Map();
+	    let routeBadgeCompact = false;
     let foregroundDotBusy = false;
     let topActionsUserScrollUntil = 0;
     let topActionsSettleTimer = 0;
@@ -3160,24 +3483,30 @@
     const ROUTE_BADGE_COMPACT_STORAGE_KEY = scopedStorageKey('codexMini.routeBadgeCompact.v1');
     const APPEARANCE_SETTINGS_STORAGE_KEY = scopedStorageKey('codexMini.appearanceSettings.v1');
     const PROJECT_SORT_MODES = ['recent', 'codex'];
-    const TOP_CONTROL_KEYS = ['context', 'newThread', 'permission', 'reasoning', 'model', 'route'];
+    const TOP_CONTROL_KEYS = ['newThread', 'route'];
     const REQUIRED_TOP_CONTROL_KEYS = [];
     const TOP_CONTROL_LABELS = {
-      context: '上下文圆环',
       newThread: '添加线程',
-      permission: '权限设置',
-      reasoning: '模型强度',
-      model: '选择模型',
-      route: '线路胶囊',
+      route: '线路按钮',
     };
     const TOP_CONTROL_DESCRIPTIONS = {
-      context: '显示上下文百分比或用量',
       newThread: '新建当前项目或对话线程',
-      permission: '切换请求批准、替我审批等权限',
-      reasoning: '切换低中高超高',
-      model: '选择或切换模型',
       route: '显示本地或外网线路',
     };
+    const BUILTIN_SKILL_COMMANDS = [
+      { name: 'imagegen', title: '生成或编辑图片', desc: '创建图片、改图、做视觉资产' },
+      { name: 'openai-docs', title: '查询 OpenAI 官方文档', desc: '需要最新 OpenAI API 或 Codex 文档时使用' },
+      { name: 'browser:control-in-app-browser', title: '控制内置浏览器', desc: '打开、点击、截图、验证本地网页' },
+      { name: 'chrome:control-chrome', title: '控制 Chrome', desc: '需要用户 Chrome 登录态时使用' },
+      { name: 'computer-use:computer-use', title: '控制 Mac 应用', desc: '点击、输入、滚动本机桌面应用' },
+      { name: 'documents:documents', title: '处理 Word 文档', desc: '创建、编辑、渲染 docx' },
+      { name: 'presentations:Presentations', title: '制作演示文稿', desc: '创建和检查 PPTX' },
+      { name: 'spreadsheets:Spreadsheets', title: '处理表格', desc: '创建、分析、格式化 xlsx/csv' },
+    ];
+    let slashMenuItems = [];
+    let slashActiveIndex = 0;
+    let slashRange = null;
+    let slashTouchPick = null;
     const THREAD_NOTICE_MAX_AGE_MS = 30 * 60 * 1000;
     const THREAD_SPINNER_MS = 850;
     const LOCAL_STOP_SUPPRESS_MS = 2 * 60 * 1000;
@@ -3429,6 +3758,207 @@
       return html || '<p></p>';
     }
     function setMarkdown(el, markdown) { el.innerHTML = markdownToHtml(markdown); }
+    function currentSlashRange() {
+      if (!textarea || document.activeElement !== textarea) return null;
+      const value = textarea.value || '';
+      const start = Number(textarea.selectionStart);
+      const end = Number(textarea.selectionEnd);
+      if (!Number.isFinite(start) || start !== end) return null;
+      const lineStart = Math.max(value.lastIndexOf('\n', start - 1) + 1, 0);
+      const beforeCursor = value.slice(lineStart, start);
+      const match = beforeCursor.match(/^\/([^\s]*)$/);
+      if (!match) return null;
+      return { start: lineStart, end: start, query: match[1] || '' };
+    }
+    function slashSearchText(item) {
+      return `${item.name || ''} ${item.title || ''} ${item.desc || ''}`.toLowerCase();
+    }
+    function slashMatches(query = '') {
+      const raw = String(query || '').trim().toLowerCase();
+      const normalized = raw.replace(/^skill[-_:]?/, '');
+      const search = normalized || (raw === 'skill' ? '' : raw);
+      const items = BUILTIN_SKILL_COMMANDS.filter(item => {
+        if (!search) return true;
+        return slashSearchText(item).includes(search);
+      });
+      return items.length ? items.slice(0, 8) : BUILTIN_SKILL_COMMANDS.slice(0, 8);
+    }
+    function closeSlashMenu() {
+      if (!slashMenu) return;
+      slashMenu.hidden = true;
+      document.body.classList.remove('slash-menu-open');
+      slashMenu.textContent = '';
+      slashMenu.style.left = '';
+      slashMenu.style.top = '';
+      slashMenu.style.width = '';
+      slashMenu.style.maxHeight = '';
+      delete slashMenu.dataset.rangeStart;
+      delete slashMenu.dataset.rangeEnd;
+      slashMenuItems = [];
+      slashActiveIndex = 0;
+      slashRange = null;
+      slashTouchPick = null;
+    }
+    function positionSlashMenu() {
+      if (!slashMenu || slashMenu.hidden || !composer || typeof composer.getBoundingClientRect !== 'function') return;
+      const viewport = floatingViewportRect();
+      const composerRect = composer.getBoundingClientRect();
+      if (!composerRect.width && !composerRect.height) return;
+      const margin = 10;
+      const gap = 8;
+      const width = Math.round(Math.min(420, Math.max(220, Math.min(composerRect.width - 18, viewport.width - (margin * 2)))));
+      const left = clampNumber(composerRect.left + 9, viewport.left + margin, viewport.right - margin - width);
+      const availableAbove = Math.max(0, composerRect.top - viewport.top - margin - gap);
+      const availableBelow = Math.max(0, viewport.bottom - composerRect.bottom - margin - gap);
+      const viewportMax = Math.max(96, viewport.height - (margin * 2));
+      let preferBelow = availableAbove < 72 && availableBelow > availableAbove;
+      let maxHeight = Math.min(290, viewportMax, Math.max(preferBelow ? availableBelow : availableAbove, 72));
+      slashMenu.style.width = `${width}px`;
+      slashMenu.style.maxHeight = `${Math.round(maxHeight)}px`;
+      slashMenu.style.left = `${Math.round(left)}px`;
+      slashMenu.style.top = '0px';
+      const measuredHeight = slashMenu.getBoundingClientRect().height || slashMenu.offsetHeight || maxHeight;
+      let height = Math.min(measuredHeight, maxHeight);
+      let top = preferBelow ? composerRect.bottom + gap : composerRect.top - height - gap;
+      if (preferBelow && top + height > viewport.bottom - margin) {
+        preferBelow = false;
+        maxHeight = Math.min(290, viewportMax, Math.max(availableAbove, 72));
+        slashMenu.style.maxHeight = `${Math.round(maxHeight)}px`;
+        height = Math.min(measuredHeight, maxHeight);
+        top = Math.max(viewport.top + margin, composerRect.top - height - gap);
+      }
+      top = clampNumber(top, viewport.top + margin, viewport.bottom - margin - height);
+      slashMenu.style.top = `${Math.round(top)}px`;
+    }
+    function renderSlashMenu() {
+      if (!slashMenu) return;
+      slashRange = currentSlashRange();
+      if (!slashRange) return closeSlashMenu();
+      slashMenu.dataset.rangeStart = String(slashRange.start);
+      slashMenu.dataset.rangeEnd = String(slashRange.end);
+      slashMenuItems = slashMatches(slashRange.query);
+      slashActiveIndex = Math.max(0, Math.min(slashActiveIndex, slashMenuItems.length - 1));
+      slashMenu.textContent = '';
+      for (const [index, item] of slashMenuItems.entries()) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `slash-item${index === slashActiveIndex ? ' is-active' : ''}`;
+        button.dataset.index = String(index);
+        button.dataset.name = item.name;
+        button.dataset.rangeStart = String(slashRange.start);
+        button.dataset.rangeEnd = String(slashRange.end);
+        button.setAttribute('role', 'option');
+        button.setAttribute('aria-selected', index === slashActiveIndex ? 'true' : 'false');
+        button.innerHTML = `<span class="slash-item-token">/skill</span><span class="slash-item-body"><span class="slash-item-title">${escapeHtml(item.name)} · ${escapeHtml(item.title)}</span><span class="slash-item-desc">${escapeHtml(item.desc || '')}</span></span>`;
+        slashMenu.appendChild(button);
+      }
+      slashMenu.hidden = !slashMenuItems.length;
+      document.body.classList.toggle('slash-menu-open', Boolean(slashMenuItems.length));
+      if (slashMenuItems.length) {
+        positionSlashMenu();
+        requestAnimationFrame(positionSlashMenu);
+      }
+    }
+    function insertSlashSkill(index = slashActiveIndex, fallbackName = '') {
+      const item = slashMenuItems[index] || BUILTIN_SKILL_COMMANDS.find(row => row.name === fallbackName);
+      const storedStart = Number(slashMenu?.dataset.rangeStart || NaN);
+      const storedEnd = Number(slashMenu?.dataset.rangeEnd || NaN);
+      const storedRange = Number.isFinite(storedStart) && Number.isFinite(storedEnd) ? { start: storedStart, end: storedEnd } : null;
+      const range = slashRange || currentSlashRange() || storedRange;
+      const name = item?.name || fallbackName;
+      if (!name || !range) return false;
+      const value = textarea.value || '';
+      const command = `/skill ${name} `;
+      textarea.value = `${value.slice(0, range.start)}${command}${value.slice(range.end)}`;
+      const cursor = range.start + command.length;
+      textarea.setSelectionRange(cursor, cursor);
+      autosize();
+      closeSlashMenu();
+      textarea.focus({ preventScroll: true });
+      return true;
+    }
+    function insertSlashSkillFromButton(button) {
+      if (!button || !textarea) return false;
+      const name = button.dataset.name || '';
+      const start = Number(button.dataset.rangeStart || slashMenu?.dataset.rangeStart || NaN);
+      const end = Number(button.dataset.rangeEnd || slashMenu?.dataset.rangeEnd || NaN);
+      if (!name || !Number.isFinite(start) || !Number.isFinite(end)) return false;
+      const value = textarea.value || '';
+      const command = `/skill ${name} `;
+      textarea.value = `${value.slice(0, start)}${command}${value.slice(end)}`;
+      const cursor = start + command.length;
+      textarea.focus({ preventScroll: true });
+      textarea.setSelectionRange(cursor, cursor);
+      autosize();
+      closeSlashMenu();
+      return true;
+    }
+    function handleComposerInput() {
+      autosize();
+      slashActiveIndex = 0;
+      renderSlashMenu();
+    }
+    function handleSlashKeydown(event) {
+      if (!slashMenu || slashMenu.hidden) return false;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeSlashMenu();
+        return true;
+      }
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        const direction = event.key === 'ArrowDown' ? 1 : -1;
+        slashActiveIndex = (slashActiveIndex + direction + slashMenuItems.length) % slashMenuItems.length;
+        renderSlashMenu();
+        return true;
+      }
+      if (event.key === 'Enter' || event.key === 'Tab') {
+        event.preventDefault();
+        return insertSlashSkill();
+      }
+      return false;
+    }
+    function slashPickButtonFromEvent(event) {
+      const button = event.target.closest?.('.slash-item');
+      if (!button || !slashMenu?.contains(button)) return null;
+      return button;
+    }
+    function beginSlashPick(event) {
+      const button = slashPickButtonFromEvent(event);
+      if (!button) {
+        slashTouchPick = null;
+        return;
+      }
+      slashTouchPick = {
+        button,
+        pointerId: event.pointerId ?? null,
+        x: event.clientX || 0,
+        y: event.clientY || 0,
+        moved: false,
+      };
+    }
+    function moveSlashPick(event) {
+      if (!slashTouchPick) return;
+      if (slashTouchPick.pointerId !== null && event.pointerId !== slashTouchPick.pointerId) return;
+      const dx = Math.abs((event.clientX || 0) - slashTouchPick.x);
+      const dy = Math.abs((event.clientY || 0) - slashTouchPick.y);
+      if (dx > 8 || dy > 8) slashTouchPick.moved = true;
+    }
+    function finishSlashPick() {
+      window.setTimeout(() => { slashTouchPick = null; }, 420);
+    }
+    function handleSlashPickEvent(event) {
+      const button = slashPickButtonFromEvent(event);
+      if (!button) return;
+      if (slashTouchPick?.moved) {
+        slashTouchPick = null;
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      slashTouchPick = null;
+      insertSlashSkillFromButton(button);
+    }
     async function writeClipboardText(text = '') {
       const value = String(text || '');
       if (!value.trim()) return false;
@@ -3540,8 +4070,8 @@
     }
     function lockPageScrollToThread() {
       let pageTouch = null;
-      const verticalScrollSelector = '.thread, .thread-menu, .steps, textarea';
-      const horizontalScrollSelector = '.top-actions, .process-tool-row, .table-scroll, .attachment-tray';
+      const verticalScrollSelector = '.thread, .thread-menu, .steps, .slash-menu, textarea';
+      const horizontalScrollSelector = '.top-actions, .composer-setting-controls, .process-tool-row, .table-scroll, .attachment-tray';
       const selectableTextSelector = '.message .bubble, .markdown-body, .approval-content';
       const resetPageTouch = () => { pageTouch = null; };
       const preventPageMove = event => {
@@ -3706,7 +4236,6 @@
       topStatus.innerHTML = `<span class="context-text"><span class="context-percent">${displayText}</span></span><span class="context-ring" aria-hidden="true"></span>`;
       topStatus.title = `${topStatusState || '已连接'} · ${detail}`;
       topStatus.setAttribute('aria-label', `${detail}。点击切换显示模式。`);
-      alignTopActionsRight({ preserveUserScroll: true });
     }
     function updateContextFromStatus(data) {
       if (data && data.context) renderContextIndicator(data.context);
@@ -3901,7 +4430,8 @@
     }
     async function switchPermissionMode(targetKey = '') {
       if (switchingPermissionMode) return;
-      if (!selectedThreadId) {
+      const guidanceThreadId = activeWatch?.threadId || selectedThreadId;
+      if (!guidanceThreadId) {
         setNotice('请先选择一个已有线程', 'error');
         return;
       }
@@ -4312,11 +4842,7 @@
     }
     function topControlDefinitions() {
       return [
-        { key: 'context', element: topStatus, required: false },
         { key: 'newThread', element: newThreadButton, required: false },
-        { key: 'permission', element: permissionBadge, required: false },
-        { key: 'reasoning', element: reasoningBadge, required: false },
-        { key: 'model', element: modelBadge, required: false },
         { key: 'route', element: routeBadge, required: false },
       ];
     }
@@ -4344,9 +4870,18 @@
         item.element.style.order = String(orderIndex.get(item.key) || 50);
       }
       if (settingsButton) settingsButton.style.order = '99';
+      ensureComposerControlVisibility();
       applyTopActionAnchor();
       renderTopControlSettings();
       alignTopActionsRight();
+    }
+    function ensureComposerControlVisibility() {
+      for (const element of [permissionBadge, reasoningBadge, modelBadge]) {
+        if (!element) continue;
+        element.hidden = false;
+        element.classList.remove('is-hidden-by-settings');
+        element.style.order = '';
+      }
     }
     function topControlSettingRow(key, index, order) {
       const required = REQUIRED_TOP_CONTROL_KEYS.includes(key);
@@ -4372,7 +4907,7 @@
       const settings = currentTopControlsSettings();
       topControlSettingsList.innerHTML = settings.order.map((key, index) => topControlSettingRow(key, index, settings.order)).join('');
     }
-    function updateTopControlsSettings(nextSettings, noticeText = '右上角胶囊设置已保存') {
+    function updateTopControlsSettings(nextSettings, noticeText = '顶部按钮设置已保存') {
       writeAppearanceSettings({ topControls: normalizeTopControlsSettings(nextSettings) });
       setNotice(noticeText, 'ok');
     }
@@ -4383,19 +4918,19 @@
       const nextIndex = index + direction;
       if (index < 0 || nextIndex < 0 || nextIndex >= order.length) return;
       [order[index], order[nextIndex]] = [order[nextIndex], order[index]];
-      updateTopControlsSettings({ ...settings, order }, '右上角胶囊顺序已保存');
+      updateTopControlsSettings({ ...settings, order }, '顶部按钮顺序已保存');
     }
     function toggleTopControlVisibility(key) {
       const settings = currentTopControlsSettings();
       const visible = { ...settings.visible, [key]: settings.visible[key] === false };
-      updateTopControlsSettings({ ...settings, visible }, visible[key] ? '已显示这个胶囊' : '已隐藏这个胶囊');
+      updateTopControlsSettings({ ...settings, visible }, visible[key] ? '已显示这个按钮' : '已隐藏这个按钮');
     }
     function showSettingsPage(page = 'root') {
       const safePage = settingsPages.some(item => item.dataset.settingsPage === page) ? page : 'root';
       for (const item of settingsPages) item.classList.toggle('is-active', item.dataset.settingsPage === safePage);
       if (settingsBackButton) settingsBackButton.hidden = safePage === 'root';
       if (settingsTitleText) {
-        settingsTitleText.textContent = safePage === 'top-controls' ? '右上角胶囊'
+        settingsTitleText.textContent = safePage === 'top-controls' ? '顶部按钮'
           : safePage === 'thread-list' ? '线程列表'
           : safePage === 'appearance' ? '外观与签名'
           : safePage === 'device' ? '设备'
@@ -5133,6 +5668,7 @@
       document.documentElement.style.setProperty('--app-height', `${Math.max(maxViewportHeight || 0, baselineHeight || 0)}px`);
       document.documentElement.style.setProperty('--keyboard-shift', '0px');
       keepLayoutViewportPinned();
+      positionOpenComposerMenus();
     }
 
     function visualViewportBottom() {
@@ -5180,6 +5716,7 @@
       document.body.classList.toggle('keyboard-open', nextShift > 0 || document.activeElement === textarea);
       document.documentElement.style.setProperty('--keyboard-shift', `${nextShift}px`);
       keepLayoutViewportPinned();
+      positionOpenComposerMenus();
       return true;
     }
 
@@ -5286,6 +5823,7 @@
       document.documentElement.style.setProperty('--keyboard-shift', `${keyboardShiftTarget}px`);
       forceComposerAboveViewport();
       keepLayoutViewportPinned();
+      positionOpenComposerMenus();
       return true;
     }
 
@@ -5296,6 +5834,7 @@
         keyboardAlignRaf = 0;
         if (keyboardOpen && document.activeElement === textarea) forceComposerAboveViewport();
         keepLayoutViewportPinned();
+        positionOpenComposerMenus();
         thread.scrollTop = thread.scrollHeight;
         if (keyboardOpen && document.activeElement === textarea) {
           keyboardComposerRevealDone = true;
@@ -5310,6 +5849,7 @@
         const restored = viewportHeight > 0 && maxViewportHeight - viewportHeight <= 64;
         if (restored && (currentKeyboardShift() > 0 || document.body.classList.contains('keyboard-open'))) {
           resetKeyboardLayout();
+          positionOpenComposerMenus();
           requestAnimationFrame(positionComposerSignature);
           return;
         }
@@ -5697,11 +6237,11 @@
       return commandKindForText(latest?.textContent || '');
     }
 
-    function stepMarkdown(steps = []) {
-      if (!steps.length) return '已发送，等待 Codex 开始回复…';
-      return steps.map(step => {
-        if (step.kind === 'tool') return `- **工具**：${step.text || ''}`;
-        if (step.kind === 'thinking') return step.text || '正在分析请求';
+	    function stepMarkdown(steps = []) {
+	      if (!steps.length) return '已发送，等待 Codex 开始回复…';
+	      return steps.map(step => {
+	        if (step.kind === 'tool') return `- **工具${step.state === 'complete' ? '完成' : '进行中'}**：${step.text || ''} ${step.toolType || ''} ${step.callId || ''}`.trim();
+	        if (step.kind === 'thinking') return step.text || '正在分析请求';
         if (step.kind === 'start') return `- **开始**：${step.text || '开始处理'}`;
         if (step.kind === 'complete') return `- **完成**：${step.text || '回复完成'}`;
         if (step.kind === 'error') return `- **失败**：${step.text || 'Codex 回复失败'}`;
@@ -5748,15 +6288,18 @@
         currentToolRow.className = 'process-tool-row';
         currentToolRow.setAttribute('aria-label', '工具调用过程，可左右滑动查看');
         feed.appendChild(currentToolRow);
-        for (let i = group.length - 1; i >= 0; i -= 1) {
-          const step = group[i];
-          const item = document.createElement('div');
-          item.className = 'process-tool';
-          item.textContent = step.text || '调用工具';
-          item.dataset.toolKey = step.callId || `${toolGroupIndex}:${i}:${step.text || ''}`;
-          currentToolRow.appendChild(item);
-        }
-      };
+	        for (let i = group.length - 1; i >= 0; i -= 1) {
+	          const step = group[i];
+	          const item = document.createElement('div');
+	          const toolType = String(step.toolType || 'tool').replace(/[^a-z0-9_-]/gi, '') || 'tool';
+	          const state = step.state === 'complete' ? 'complete' : 'running';
+	          item.className = `process-tool type-${toolType} is-${state}`;
+	          item.textContent = step.text || '调用工具';
+	          item.dataset.toolKey = step.callId || `${toolGroupIndex}:${i}:${step.text || ''}`;
+	          item.title = state === 'complete' ? `已完成：${item.textContent}` : `进行中：${item.textContent}`;
+	          currentToolRow.appendChild(item);
+	        }
+	      };
 
       let pendingToolGroup = [];
       const flushToolGroup = () => {
@@ -5949,21 +6492,54 @@
       return body || attachmentText || '空消息';
     }
 
-    function renderQueuedSends() {
-      const count = queuedSends.length;
-      queuedSend.classList.toggle('is-visible', count > 0);
-      if (!count) {
-        queuedSend.classList.remove('is-sending');
-        queuedSendText.textContent = '';
-        positionComposerSignature();
-        return;
-      }
-      const hasSending = queuedSends.some(item => item.state === 'sending');
-      queuedSend.classList.toggle('is-sending', hasSending);
-      queuedSendLabel.textContent = hasSending ? '发送中' : count > 1 ? `待发送 ${count}` : '待发送';
-      queuedSendText.textContent = queuedSends.map(item => item.summary).join(' ｜ ');
-      positionComposerSignature();
-    }
+	    function renderQueuedSends() {
+	      const count = queuedSends.length;
+	      queuedSend.classList.toggle('is-visible', count > 0);
+	      if (!count) {
+	        queuedSend.classList.remove('is-sending');
+	        queuedSendList.innerHTML = '';
+	        positionComposerSignature();
+	        return;
+	      }
+	      const hasSending = queuedSends.some(item => item.state === 'sending');
+	      queuedSend.classList.toggle('is-sending', hasSending);
+	      queuedSendLabel.textContent = hasSending ? '发送中' : count > 1 ? `待发送 ${count}` : '待发送';
+	      queuedSendList.innerHTML = '';
+	      for (const item of queuedSends) {
+	        const row = document.createElement('span');
+	        row.className = `queued-send-item is-${item.state || 'queued'}`;
+	        row.dataset.queuedId = item.id;
+
+	        const state = document.createElement('span');
+	        state.className = 'queued-send-state';
+	        state.textContent = item.state === 'sending' ? '发送中' : item.state === 'guiding' ? '引导中' : item.state === 'guided' ? '已引导' : '已排队';
+
+	        const text = document.createElement('span');
+	        text.className = 'queued-send-item-text';
+	        text.textContent = item.summary;
+	        text.title = item.summary;
+
+	        row.append(state, text);
+	        const canGuide = item.state === 'queued' && String(item.text || '').trim() && !(item.attachments || []).length;
+	        if (canGuide || item.state === 'guiding') {
+	          const guide = document.createElement('button');
+	          guide.className = 'queued-send-guide';
+	          guide.type = 'button';
+	          guide.textContent = item.state === 'guiding' ? '处理中' : '引导';
+	          guide.disabled = item.state === 'guiding';
+	          guide.setAttribute('aria-label', `将队列消息作为引导：${item.summary}`);
+	          guide.addEventListener('pointerdown', event => event.stopPropagation());
+	          guide.addEventListener('click', event => {
+	            event.preventDefault();
+	            event.stopPropagation();
+	            applyQueuedGuidance(item.id);
+	          });
+	          row.appendChild(guide);
+	        }
+	        queuedSendList.appendChild(row);
+	      }
+	      positionComposerSignature();
+	    }
 
     function addQueuedSend(text, attachments = [], state = 'sending', options = {}) {
       const id = `queued-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -5972,25 +6548,80 @@
       return id;
     }
 
-    function updateQueuedSend(id, state = 'queued') {
-      const item = queuedSends.find(row => row.id === id);
-      if (!item) return;
-      item.state = state;
-      renderQueuedSends();
-    }
+	    function updateQueuedSend(id, state = 'queued') {
+	      const item = queuedSends.find(row => row.id === id);
+	      if (!item) return;
+	      item.state = state;
+	      renderQueuedSends();
+	    }
+
+	    function queuedSendById(id) {
+	      return queuedSends.find(row => row.id === id) || null;
+	    }
 
     function removeQueuedSend(id) {
       queuedSends = queuedSends.filter(row => row.id !== id);
       renderQueuedSends();
     }
 
-    function clearQueuedSends() {
-      if (!queuedSends.length) return;
-      queuedSends = [];
-      renderQueuedSends();
-    }
+	    function clearQueuedSends() {
+	      if (!queuedSends.length) return;
+	      queuedSends = [];
+	      renderQueuedSends();
+	    }
 
-    function watchSinceAfter(value) {
+	    async function applyQueuedGuidance(id) {
+	      const item = queuedSendById(id);
+	      if (!item || item.state !== 'queued') return;
+	      const text = String(item.text || '');
+	      if (!text.trim()) return;
+	      if ((item.attachments || []).length) {
+	        setNotice('带附件的队列消息不能转为引导', 'error');
+	        return;
+	      }
+	      const guidanceThreadId = activeWatch?.threadId || selectedThreadId;
+	      if (!guidanceThreadId) {
+	        setNotice('请先选择一个已有线程', 'error');
+	        return;
+	      }
+	      updateQueuedSend(id, 'guiding');
+	      setWorkingDot(true);
+	      setNotice('正在把队列消息作为引导…', 'ok');
+	      try {
+	        await ensureRouteForSend();
+	        const clientRequestId = `queued-guide-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+	        const response = await fetchApi('/send', {
+	          method: 'POST',
+	          headers: { 'content-type': 'application/json', 'x-mobile-typer-token': token },
+	          body: JSON.stringify({
+	            clientRequestId,
+	            text,
+	            target: 'codex',
+	            threadId: guidanceThreadId,
+	            mode: 'queued-guidance',
+	            applyQueuedGuidance: true,
+	          }),
+	          apiTimeoutMs: 60000,
+	          routeSwitchQuiet: true,
+	          retryProbeTimeoutMs: 900,
+	        });
+	        const data = await response.json().catch(() => ({}));
+	        if (!response.ok || !data.ok) throw new Error(data.message || '发送引导失败');
+	        if (!data.guidanceApplied) throw new Error(data.message || '没有确认点击队列消息的引导按钮');
+	        removeQueuedSend(id);
+	        appendGuidanceMessages([{ text, label: '你 · 引导', timestamp: data.sentAt || new Date().toISOString() }]);
+	        if (data.watch) activeWatch = { ...(activeWatch || {}), ...data.watch, guidance: true };
+	        setNotice('已把队列消息作为引导发送', 'ok');
+	      } catch (error) {
+	        const current = queuedSendById(id);
+	        if (current && current.state === 'guiding') updateQueuedSend(id, 'queued');
+	        setNotice(error.message || '发送引导失败', 'error');
+	      } finally {
+	        if (!activeAssistant && !pollTimer) setWorkingDot(false);
+	      }
+	    }
+
+	    function watchSinceAfter(value) {
       const t = Date.parse(value || '');
       return new Date((Number.isFinite(t) ? t : Date.now()) + 1).toISOString();
     }
@@ -6074,7 +6705,7 @@
       return message;
     }
 
-    function addDetails(message, steps = []) {
+	    function addDetails(message, steps = []) {
       const old = message.article.querySelector('details.process');
       if (old) old.remove();
       if (!steps.length) return;
@@ -6084,11 +6715,14 @@
       details.className = 'process';
       list.className = 'steps';
       summary.textContent = '查看详细过程';
-      for (const step of steps) {
-        const li = document.createElement('li');
-        li.textContent = `${step.label || '事件'}：${step.text || ''}`;
-        list.appendChild(li);
-      }
+	      for (const step of steps) {
+	        const li = document.createElement('li');
+	        const state = step.kind === 'tool'
+	          ? (step.state === 'complete' ? '完成' : '进行中')
+	          : '';
+	        li.textContent = `${step.label || '事件'}${state ? ` · ${state}` : ''}：${step.text || ''}`;
+	        list.appendChild(li);
+	      }
       details.append(summary, list);
       message.article.querySelector('.bubble-wrap').appendChild(details);
     }
@@ -6118,11 +6752,12 @@
       return `${STORAGE_PREFIX}.${threadId || 'default'}`;
     }
 
-    function clearThreadMessages() {
-      [...thread.querySelectorAll('.message')].forEach(node => node.remove());
-      clearQueuedSends();
-      appendedGuidanceMessageKeys = new Set();
-    }
+	    function clearThreadMessages() {
+	      [...thread.querySelectorAll('.message')].forEach(node => node.remove());
+	      clearQueuedSends();
+	      appendedGuidanceMessageKeys = new Set();
+	      appendedGuidanceMessageFingerprints = new Map();
+	    }
 
     function updateThreadTitle() {
       if (pendingNewThread && !selectedThreadId) {
@@ -7131,25 +7766,41 @@
       lastUserMessageMarker = { threadId: threadId || '', at: at || '', text: String(text || '') };
     }
 
-    function guidanceMessageKey(row = {}) {
-      return [
-        row.timestamp || '',
-        String(row.text || '').replace(/\s+/g, ' ').trim().slice(0, 260),
-      ].join('|');
-    }
+	    function guidanceMessageFingerprint(text = '') {
+	      return String(text || '').replace(/\s+/g, ' ').trim().slice(0, 500);
+	    }
 
-    function appendGuidanceMessages(rows = []) {
-      if (!Array.isArray(rows) || !rows.length) return false;
-      let appended = false;
-      for (const row of rows) {
-        const text = String(row?.text || '');
-        if (!text.trim()) continue;
-        const key = guidanceMessageKey(row);
-        if (appendedGuidanceMessageKeys.has(key)) continue;
-        appendedGuidanceMessageKeys.add(key);
-        messageEl('user', text, { label: row.label || '你 · 引导' });
-        appended = true;
-      }
+	    function guidanceMessageKey(row = {}) {
+	      return `${row.timestamp || ''}|${guidanceMessageFingerprint(row.text || '')}`;
+	    }
+
+	    function rememberGuidanceFingerprint(text = '', now = Date.now()) {
+	      const fingerprint = guidanceMessageFingerprint(text);
+	      if (!fingerprint) return '';
+	      for (const [key, at] of appendedGuidanceMessageFingerprints) {
+	        if (now - at > 20000) appendedGuidanceMessageFingerprints.delete(key);
+	      }
+	      appendedGuidanceMessageFingerprints.set(fingerprint, now);
+	      return fingerprint;
+	    }
+
+	    function appendGuidanceMessages(rows = []) {
+	      if (!Array.isArray(rows) || !rows.length) return false;
+	      let appended = false;
+	      for (const row of rows) {
+	        const text = String(row?.text || '');
+	        if (!text.trim()) continue;
+	        const key = guidanceMessageKey(row);
+	        const now = Date.now();
+	        const fingerprint = guidanceMessageFingerprint(text);
+	        const recentAt = appendedGuidanceMessageFingerprints.get(fingerprint) || 0;
+	        if (recentAt && now - recentAt < 20000) continue;
+	        if (appendedGuidanceMessageKeys.has(key)) continue;
+	        appendedGuidanceMessageKeys.add(key);
+	        rememberGuidanceFingerprint(text, now);
+	        messageEl('user', text, { label: row.label || '你 · 引导' });
+	        appended = true;
+	      }
       if (appended && activeAssistant?.article?.isConnected) {
         thread.appendChild(activeAssistant.article);
         scrollBottom();
@@ -7218,7 +7869,7 @@
       if (!isRunningStatus(data)) return false;
 
       appendDesktopUserMessageIfMissing(threadId, data);
-      appendGuidanceMessages(data.guidanceMessages || []);
+      if (options.guidance) appendGuidanceMessages(data.guidanceMessages || []);
       const durationText = formatDuration(data.durationMs || 0);
       const resumeCommandKind = latestUserCommandKind();
       const resumeCommandUi = commandUi(resumeCommandKind);
@@ -7422,6 +8073,7 @@
       if (watch.expectNewThread) params.set('expectNewThread', '1');
       if (watch.excludeThreadId) params.set('excludeThread', watch.excludeThreadId);
       if (watch.cwd) params.set('cwd', watch.cwd);
+      if (watch.guidance) params.set('guidance', '1');
       try {
         const res = await fetchApi(`/codex/status?${params}`, { cache: 'no-store' });
         const data = await res.json();
@@ -7434,7 +8086,7 @@
           applyThreadRuntimeState(data.threadId || watch.threadId || selectedThreadId, runtimeSnapshotFromStatusData(data), { detectTransitions: true });
           renderThreadMenuIfVisualChanged();
           lastStatusSignature = codexStatusSignature(data);
-          appendGuidanceMessages(data.guidanceMessages || []);
+          if (watch.guidance) appendGuidanceMessages(data.guidanceMessages || []);
         }
         setActiveRunStart(data.startedAt || watch.since || '', Date.now() - (Number(data.durationMs) || 0));
         const activeCommandUi = commandUi(activeAssistant.commandKind || '');
@@ -7833,23 +8485,94 @@
       permissionMenuCard.classList.remove('is-open');
       permissionMenuCard.style.left = '';
       permissionMenuCard.style.top = '';
+      permissionMenuCard.style.maxHeight = '';
+    }
+
+    function floatingViewportRect() {
+      const viewport = window.visualViewport;
+      const width = Math.round((viewport && viewport.width) || window.innerWidth || document.documentElement.clientWidth || 0);
+      const height = Math.round((viewport && viewport.height) || window.innerHeight || document.documentElement.clientHeight || 0);
+      const left = Math.round((viewport && viewport.offsetLeft) || 0);
+      const top = Math.round((viewport && viewport.offsetTop) || 0);
+      return {
+        left,
+        top,
+        width,
+        height,
+        right: left + width,
+        bottom: top + height,
+      };
+    }
+
+    function resetFloatingCardMetrics(card) {
+      if (!card) return;
+      card.style.left = '0px';
+      card.style.top = '0px';
+      card.style.maxHeight = '';
+    }
+
+    function measureFloatingCard(card, fallbackWidth = 292, fallbackHeight = 240) {
+      if (!card) return { width: fallbackWidth, height: fallbackHeight };
+      const rect = card.getBoundingClientRect();
+      return {
+        width: Math.round(rect.width || card.offsetWidth || fallbackWidth),
+        height: Math.round(rect.height || card.offsetHeight || fallbackHeight),
+      };
+    }
+
+    function positionFloatingCard(card, anchorElement, options = {}) {
+      if (!card || !anchorElement || typeof anchorElement.getBoundingClientRect !== 'function') return;
+      const anchor = anchorElement.getBoundingClientRect();
+      if (!anchor.width && !anchor.height) return;
+      const verticalAnchorElement = options.verticalAnchorElement;
+      const verticalAnchor = verticalAnchorElement && typeof verticalAnchorElement.getBoundingClientRect === 'function'
+        ? verticalAnchorElement.getBoundingClientRect()
+        : anchor;
+      const viewport = floatingViewportRect();
+      const margin = options.margin ?? 10;
+      const gap = options.gap ?? 8;
+      const fallbackWidth = options.fallbackWidth ?? 292;
+      const fallbackHeight = options.fallbackHeight ?? 240;
+      const align = options.align || 'right';
+      resetFloatingCardMetrics(card);
+      const measured = measureFloatingCard(card, fallbackWidth, fallbackHeight);
+      const maxWidth = Math.max(1, viewport.width - (margin * 2));
+      const cardWidth = Math.min(measured.width, maxWidth);
+      const availableAbove = Math.max(0, verticalAnchor.top - viewport.top - margin - gap);
+      const availableBelow = Math.max(0, viewport.bottom - verticalAnchor.bottom - margin - gap);
+      let useAbove = options.placement === 'above'
+        ? true
+        : options.placement === 'below'
+          ? false
+          : availableAbove >= measured.height || availableAbove >= availableBelow;
+      if (useAbove && availableAbove < 72 && availableBelow > availableAbove) useAbove = false;
+      if (!useAbove && availableBelow < 72 && availableAbove > availableBelow) useAbove = true;
+      const availableHeight = useAbove ? availableAbove : availableBelow;
+      const viewportMaxHeight = Math.max(48, viewport.height - (margin * 2));
+      const maxHeight = Math.min(viewportMaxHeight, Math.max(48, Math.floor(availableHeight)));
+      const cardHeight = Math.min(measured.height, maxHeight);
+      const rawTop = useAbove ? verticalAnchor.top - cardHeight - gap : verticalAnchor.bottom + gap;
+      const top = clampNumber(rawTop, viewport.top + margin, viewport.bottom - margin - cardHeight);
+      const preferredLeft = align === 'left'
+        ? anchor.left
+        : align === 'center'
+          ? anchor.left + (anchor.width / 2) - (cardWidth / 2)
+          : anchor.right - cardWidth;
+      const left = clampNumber(preferredLeft, viewport.left + margin, viewport.right - margin - cardWidth);
+      card.style.left = `${Math.round(left)}px`;
+      card.style.top = `${Math.round(top)}px`;
+      card.style.maxHeight = `${Math.round(maxHeight)}px`;
     }
 
     function positionPermissionMenu(anchorElement = permissionBadge) {
-      if (!anchorElement || typeof anchorElement.getBoundingClientRect !== 'function') return;
-      const anchor = anchorElement.getBoundingClientRect();
-      const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
-      const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
-      const margin = 10;
-      const cardWidth = permissionMenuCard.offsetWidth || 232;
-      const cardHeight = permissionMenuCard.offsetHeight || 238;
-      const rightAlignedLeft = anchor.right - cardWidth;
-      const left = Math.max(margin, Math.min(viewportWidth - cardWidth - margin, rightAlignedLeft));
-      const belowTop = anchor.bottom + 7;
-      const aboveTop = anchor.top - cardHeight - 7;
-      const top = belowTop + cardHeight + margin <= viewportHeight ? belowTop : Math.max(margin, aboveTop);
-      permissionMenuCard.style.left = `${Math.round(left)}px`;
-      permissionMenuCard.style.top = `${Math.round(top)}px`;
+      if (!permissionMenuCard.classList.contains('is-open')) return;
+      positionFloatingCard(permissionMenuCard, anchorElement, {
+        fallbackWidth: 292,
+        fallbackHeight: 304,
+        align: 'right',
+        placement: 'above',
+        verticalAnchorElement: composer,
+      });
     }
 
     function openPermissionMenu(options = {}) {
@@ -7857,6 +8580,7 @@
       closeThreadActionCard();
       closeContextQuickCard();
       closeSettingsCard();
+      closeSlashMenu();
       closePermissionMenu();
       closeReasoningMenu();
       closeModelMenu();
@@ -7905,23 +8629,18 @@
       reasoningMenuCard.classList.remove('is-open');
       reasoningMenuCard.style.left = '';
       reasoningMenuCard.style.top = '';
+      reasoningMenuCard.style.maxHeight = '';
     }
 
     function positionReasoningMenu(anchorElement = reasoningBadge) {
-      if (!anchorElement || typeof anchorElement.getBoundingClientRect !== 'function') return;
-      const anchor = anchorElement.getBoundingClientRect();
-      const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
-      const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
-      const margin = 10;
-      const cardWidth = reasoningMenuCard.offsetWidth || 97;
-      const cardHeight = reasoningMenuCard.offsetHeight || 90;
-      const rightAlignedLeft = anchor.right - cardWidth;
-      const left = Math.max(margin, Math.min(viewportWidth - cardWidth - margin, rightAlignedLeft));
-      const belowTop = anchor.bottom + 7;
-      const aboveTop = anchor.top - cardHeight - 7;
-      const top = belowTop + cardHeight + margin <= viewportHeight ? belowTop : Math.max(margin, aboveTop);
-      reasoningMenuCard.style.left = `${Math.round(left)}px`;
-      reasoningMenuCard.style.top = `${Math.round(top)}px`;
+      if (!reasoningMenuCard.classList.contains('is-open')) return;
+      positionFloatingCard(reasoningMenuCard, anchorElement, {
+        fallbackWidth: 117,
+        fallbackHeight: 220,
+        align: 'center',
+        placement: 'above',
+        verticalAnchorElement: composer,
+      });
     }
 
     function openReasoningMenu(options = {}) {
@@ -7929,6 +8648,7 @@
       closeThreadActionCard();
       closeContextQuickCard();
       closeSettingsCard();
+      closeSlashMenu();
       closePermissionMenu();
       closeModelMenu();
       renderReasoningMenu();
@@ -7976,25 +8696,18 @@
       modelMenuCard.classList.remove('is-open');
       modelMenuCard.style.left = '';
       modelMenuCard.style.top = '';
+      modelMenuCard.style.maxHeight = '';
     }
 
     function positionModelMenu(anchorElement = modelBadge) {
-      if (!anchorElement || typeof anchorElement.getBoundingClientRect !== 'function') return;
-      const anchor = anchorElement.getBoundingClientRect();
-      const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
-      const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
-      const margin = 10;
-      const cardWidth = modelMenuCard.offsetWidth || 182;
-      const cardHeight = modelMenuCard.offsetHeight || 160;
-      const rightAlignedLeft = anchor.right - cardWidth;
-      const left = Math.max(margin, Math.min(viewportWidth - cardWidth - margin, rightAlignedLeft));
-      const topbarBottom = topbar ? topbar.getBoundingClientRect().bottom : 0;
-      const minTop = Math.max(margin, topbarBottom + 7);
-      const belowTop = anchor.bottom + 7;
-      const aboveTop = anchor.top - cardHeight - 7;
-      const top = belowTop + cardHeight + margin <= viewportHeight ? Math.max(minTop, belowTop) : Math.max(minTop, aboveTop);
-      modelMenuCard.style.left = `${Math.round(left)}px`;
-      modelMenuCard.style.top = `${Math.round(top)}px`;
+      if (!modelMenuCard.classList.contains('is-open')) return;
+      positionFloatingCard(modelMenuCard, anchorElement, {
+        fallbackWidth: 292,
+        fallbackHeight: 320,
+        align: 'right',
+        placement: 'above',
+        verticalAnchorElement: composer,
+      });
     }
 
     function openModelMenu(options = {}) {
@@ -8002,12 +8715,20 @@
       closeThreadActionCard();
       closeContextQuickCard();
       closeSettingsCard();
+      closeSlashMenu();
       closePermissionMenu();
       closeReasoningMenu();
       renderModelMenu();
       modelMenuCard.classList.add('is-open');
       positionModelMenu(modelBadge);
       if (options.vibrate) vibrateForLongPress();
+    }
+
+    function positionOpenComposerMenus() {
+      positionSlashMenu();
+      positionPermissionMenu();
+      positionReasoningMenu();
+      positionModelMenu();
     }
 
     function cancelModelLongPress() {
@@ -8152,6 +8873,7 @@
       textarea.style.height = 'auto';
       textarea.style.height = Math.min(textarea.scrollHeight, 150) + 'px';
       positionComposerSignature();
+      positionOpenComposerMenus();
     }
 
     function updateComposerAction() {
@@ -8300,7 +9022,7 @@
           clientRequestId,
           text,
           target,
-          threadId: selectedThreadId,
+          threadId: guidanceThreadId,
           assumeThreadSynced: true,
           guidance: true,
         });
@@ -8314,6 +9036,7 @@
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.ok) throw new Error(data.message || '发送引导失败');
+        if (!data.guidanceApplied) throw new Error(data.message || '引导消息已发送到队列，但没有确认点击队列引导按钮');
         appendGuidanceMessages([{ text, label: '你 · 引导', timestamp: data.sentAt || new Date().toISOString() }]);
         textarea.value = '';
         autosize();
@@ -8378,7 +9101,7 @@
     }
 
     composer.addEventListener('submit', event => { event.preventDefault(); sendText(); });
-    textarea.addEventListener('input', autosize);
+    textarea.addEventListener('input', handleComposerInput);
     textarea.addEventListener('touchstart', prepareTextareaFocus, { passive: false });
     composer.addEventListener('touchstart', prepareComposerFocus, { passive: false });
     textarea.addEventListener('pointerdown', event => {
@@ -8392,6 +9115,7 @@
       if (event.pointerType === 'touch') noteOutsideComposerTouch(event);
     }, { capture: true });
     textarea.addEventListener('keydown', event => {
+      if (handleSlashKeydown(event)) return;
       if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
         event.preventDefault(); sendText();
       }
@@ -8400,18 +9124,23 @@
     textarea.addEventListener('click', scheduleKeyboardAlignment);
     textarea.addEventListener('touchend', scheduleKeyboardAlignment, { passive: true });
     textarea.addEventListener('blur', restoreLayoutAfterKeyboard);
+    slashMenu.addEventListener('pointerdown', beginSlashPick, true);
+    slashMenu.addEventListener('pointermove', moveSlashPick, true);
+    slashMenu.addEventListener('pointerup', finishSlashPick, true);
+    slashMenu.addEventListener('pointercancel', finishSlashPick, true);
+    slashMenu.addEventListener('click', handleSlashPickEvent, true);
     window.addEventListener('scroll', keepLayoutViewportPinned, { passive: true });
     window.addEventListener('resize', handleViewportKeyboardChange);
     window.addEventListener('resize', alignTopActionsRight);
     window.addEventListener('resize', positionThreadMenuCard);
     window.addEventListener('resize', positionSettingsCard);
-    window.addEventListener('resize', positionPermissionMenu);
+    window.addEventListener('resize', positionOpenComposerMenus);
     window.addEventListener('resize', positionComposerSignature);
     window.addEventListener('orientationchange', () => window.setTimeout(scheduleKeyboardAlignment, 250));
     window.addEventListener('orientationchange', () => window.setTimeout(alignTopActionsRight, 250));
     window.addEventListener('orientationchange', () => window.setTimeout(positionThreadMenuCard, 250));
     window.addEventListener('orientationchange', () => window.setTimeout(positionSettingsCard, 250));
-    window.addEventListener('orientationchange', () => window.setTimeout(positionPermissionMenu, 250));
+    window.addEventListener('orientationchange', () => window.setTimeout(positionOpenComposerMenus, 250));
     window.addEventListener('orientationchange', () => window.setTimeout(positionComposerSignature, 250));
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', handleViewportKeyboardChange);
@@ -8420,8 +9149,8 @@
       window.visualViewport.addEventListener('scroll', positionThreadMenuCard);
       window.visualViewport.addEventListener('resize', positionSettingsCard);
       window.visualViewport.addEventListener('scroll', positionSettingsCard);
-      window.visualViewport.addEventListener('resize', positionPermissionMenu);
-      window.visualViewport.addEventListener('scroll', positionPermissionMenu);
+      window.visualViewport.addEventListener('resize', positionOpenComposerMenus);
+      window.visualViewport.addEventListener('scroll', positionOpenComposerMenus);
     }
     newThreadButton.addEventListener('click', createNewThreadInCurrentProject);
     settingsButton.addEventListener('click', event => {
@@ -8846,6 +9575,7 @@
       closeThreadMenu();
     });
     document.addEventListener('click', event => {
+      if (!slashMenu.contains(event.target) && event.target !== textarea) closeSlashMenu();
       if (!threadMenu.contains(event.target) && !threadButton.contains(event.target) && !newThreadButton.contains(event.target) && !settingsButton.contains(event.target) && !permissionBadge.contains(event.target) && !reasoningBadge.contains(event.target) && !modelBadge.contains(event.target)) closeThreadMenu();
       if (!threadActionCard.contains(event.target) && !threadButton.contains(event.target) && !settingsButton.contains(event.target) && !permissionBadge.contains(event.target) && !reasoningBadge.contains(event.target) && !modelBadge.contains(event.target)) closeThreadActionCard();
       if (!contextQuickCard.contains(event.target) && !topStatus.contains(event.target)) closeContextQuickCard();

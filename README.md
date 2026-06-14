@@ -1,155 +1,185 @@
-# Codex Mini
+# Codex Mini 自托管版
 
-Codex Mini 是一个把手机浏览器连接到电脑上的 Codex Desktop 的轻量桥接工具。你可以在手机上发送文字、图片、视频和文件，并同步查看 Codex 的回复过程和结果。
+Codex Mini 自托管版可以让手机浏览器通过你自己的服务器控制 Mac 上正在运行的 Codex Desktop。
 
-> 📌 **说明**
->
-> **重大更新：官方构建版现在支持 macOS 和 Windows。**
->
-> macOS 用户下载 DMG 安装包；Windows 用户下载 EXE 安装包，在 Windows 电脑或 Windows 虚拟机内安装使用。
->
-> 本仓库也保留开源维护版本，适合有开发能力的朋友自行部署、改造和二次开发。构建版会优先提供最新功能，源码可能不会第一时间同步全部能力。
+```text
+手机浏览器 -> 公网转发服务器 -> SSH 反向隧道 -> Mac 本地服务 -> Codex Desktop CDP
+```
 
-## 当前发布版本
+本仓库的转发服务和 Mac 端服务都直接从源码目录运行。服务器只负责登录、设备选择和流量转发；真正的 Codex 登录状态、线程内容和执行过程仍然保留在每个用户自己的 Mac 上。
 
-- 版本：v4.3.0（macOS 与 Windows 已对齐）
-- 🍎 macOS · Apple 芯片（M1/M2/M3/M4…）：[下载 Codex.Mini.v4.3.0.dmg](https://github.com/CoimgRain/Codex-Mini/releases/download/codex-mini-v4.3.0/Codex.Mini.v4.3.0.dmg)
-- 💻 macOS · Intel 芯片（x86）：[下载 Codex.Mini.Intel.v4.3.0.dmg](https://github.com/CoimgRain/Codex-Mini/releases/download/codex-mini-v4.3.0/Codex.Mini.Intel.v4.3.0.dmg)
-- 🪟 Windows（10 / 11，64 位）：[下载 CodexMiniWindowsSetup-v4.3.0.exe](https://github.com/CoimgRain/Codex-Mini/releases/download/codex-mini-v4.3.0/CodexMiniWindowsSetup-v4.3.0.exe)
-- 图文安装说明：[macOS 版（PDF）](docs/Codex%20Mini%20Mac%20%E5%AE%89%E8%A3%85%E4%BD%BF%E7%94%A8%E8%AF%B4%E6%98%8E.pdf) ｜ [Windows 版（PDF）](docs/Codex%20Mini%20Windows%20%E5%AE%89%E8%A3%85%E4%BD%BF%E7%94%A8%E8%AF%B4%E6%98%8E.pdf)
-- Release 页面：[codex-mini-v4.3.0](https://github.com/CoimgRain/Codex-Mini/releases/tag/codex-mini-v4.3.0)
-- 安装方式：macOS 打开 DMG 并把 `Codex Mini.app` 拖进 `Applications`；Windows 双击 EXE 安装（无需管理员权限、无需自己装 Node），装完从桌面或开始菜单启动
+## 运行要求
 
-### 最新版 V4.2.3
+Mac 端需要：
 
-- 电脑 Codex 上直接发送的消息，现在会同步显示到手机端聊天记录，并像正常收发消息一样自然逐条出现
-- 手机端线程列表与电脑 Codex 界面保持一致，SSH 远程线程也只显示电脑端当前可见的会话
-- 线程菜单分区顺序调整为「项目 → SSH 服务器 → 对话」
-- 线程列表更稳定：连接瞬时波动时不再清空列表或自动跳到其他线程
-- 降低手机端轮询对电脑的占用，多设备同时使用时电脑 Codex 更流畅
-- 修复切换模型时偶发误入「速度」菜单的问题，聊天记录不再显示内部接续说明文本
+- macOS，已在 `/Applications` 安装并登录 `Codex.app`。
+- Node.js 18 或更新版本。
+- 系统可用的 `curl`、`python3`、`ssh`、`launchctl`。
+- 一把可以登录转发服务器的 SSH 私钥。
 
-### V4.2.2
+转发服务器需要：
 
-- **重大更新：新增官方 Windows 版安装包，Windows 版按 v4.0.0 独立版本线发布**
-- 优化启动稳定性
-- 减少重复完成提醒
-- 修复已知 bug
+- 一台 Linux 服务器，Mac 可以通过 SSH 连上，手机可以通过 HTTP/HTTPS 访问。
+- Node.js 18 或更新版本。
+- 建议使用 Nginx 承接公网 HTTP/HTTPS 流量。
 
-### V4.2 重点回顾
+## 转发服务器部署
 
-- 新增 SSH 服务器连接：手机端可以查看和接入远程 SSH 服务器上的 Codex 线程
-- 远程 SSH 线程支持独立分区显示，项目列表会自动展开并归类到“SSH 服务器”区域
-- 远程线程聊天记录可从服务器 `~/.codex/sessions` 读取，手机端可直接加载历史和回复过程
-- 优化远程 SSH 线程回复轮询，长回复不会因为轮询次数到头而强制刷新
-- 远程回复中断或网络异常时提示更清楚，减少误以为任务停止的情况
+在服务器上克隆本仓库，例如：
 
-### V4.0～V4.1 重点回顾
+```bash
+git clone https://github.com/Aono255/Codex-Mini.git /opt/codex-mini
+cd /opt/codex-mini
+```
 
-- **V4.0 重大升级**：改为全 CDP 控制链路，响应速度更快，发送更快，后台静默运行更稳定
-- 正式名称统一为 `Codex Mini.app`，安装包统一为拖拽式 `Codex.Mini.v<version>.dmg`
-- V4.1 增加附件能力和设置面板，可管理外观、签名、顶部胶囊显示与顺序等
-- 安装 V4.x 前请完整删除旧 `Codex Mini Beta.app` 和残留运行文件，建议使用第三方卸载工具删干净
-- 如果正在使用 Codex++ 或其他 CDP 控制工具，可能会冲突，只能保留一个；V3.0 的 GUI 自动化链路不受影响
+创建 `/etc/codex-mini/devices.json`：
 
-## 界面预览
+```json
+{
+  "users": [
+    {
+      "user": "bill",
+      "displayName": "Bill",
+      "relayToken": "replace-with-random-login-token"
+    }
+  ],
+  "devices": [
+    {
+      "user": "bill",
+      "device": "macbook",
+      "displayName": "Bill MacBook",
+      "relayToken": "replace-with-random-login-token",
+      "codexToken": "replace-with-random-local-token",
+      "upstream": {
+        "host": "127.0.0.1",
+        "port": 18788,
+        "protocol": "http:"
+      }
+    }
+  ]
+}
+```
 
-<p>
-  <img src="assets/screenshots/preview-thread-list.png" alt="Codex Mini 手机线程列表" width="220" />
-  <img src="assets/screenshots/preview-chat.png" alt="Codex Mini 手机聊天同步" width="220" />
-  <img src="assets/screenshots/mobile-reasoning-menu.png" alt="Codex Mini 推理模式菜单" width="220" />
-</p>
+生成随机令牌：
 
-<p>
-  <img src="assets/screenshots/ipad-layout.png" alt="Codex Mini iPad 横屏布局" width="720" />
-</p>
+```bash
+openssl rand -base64 32 | tr '+/' '-_' | tr -d '='
+```
 
-## 加入交流群
+启动转发服务：
 
-QQ 群：**760669553**
+```bash
+HOST=127.0.0.1 \
+PORT=18700 \
+CODEX_MINI_RELAY_CONFIG=/etc/codex-mini/devices.json \
+node /opt/codex-mini/server/selfhost/multi-user-relay.js
+```
 
-欢迎加入群里交流使用问题、反馈 bug、提出功能建议。后续有最新版本也会在群里及时沟通。
+生产环境可以参考仓库内的 systemd 和 Nginx 模板：
 
-## Windows 版本
+- `server/selfhost/codex-mini-relay.service`
+- `server/selfhost/nginx-codex-mini-relay.conf`
 
-官方 Windows 安装包已经随最新 Release 一起发布，文件名是 `CodexMiniWindowsSetup-v4.0.0.exe`。Windows 版支持在 Windows 桌面环境中运行 Codex Mini 控制面板，并保留手机网页控制、线程列表、CDP 受控 Codex、局域网访问和 Pro 外网入口等核心能力。
+真实用户使用时建议启用 HTTPS。
 
-社区项目 [atuizz/codex-max](https://github.com/atuizz/codex-max) 仍可作为另一个 Windows 方向参考。
+## Mac 端部署
 
-## 安装与使用
+在 Mac 上克隆本仓库：
 
-1. 按系统下载 `Codex.Mini.v4.2.3.dmg` 或 `CodexMiniWindowsSetup-v4.0.0.exe`
-2. macOS 安装前完整删除旧 `Codex Mini Beta.app`，建议用第三方卸载工具清理旧 App、旧 LaunchAgent 和旧运行目录
-3. macOS 打开 DMG，把 `Codex Mini.app` 拖到 `Applications`；Windows 直接运行 EXE 安装
-4. 打开 Codex Mini
-5. 同一 Wi‑Fi 下可直接使用局域网入口；离开局域网可使用 Pro 外网入口
-6. 建议把手机网页添加到主屏幕，体验更接近 App
+```bash
+git clone https://github.com/Aono255/Codex-Mini.git
+cd Codex-Mini
+```
 
-## 添加到主屏幕
+用一个命令安装并启动完整 Mac 端服务：
 
-iPhone 上打开 Codex Mini 网页后，按下面三步操作：
+```bash
+scripts/selfhost/codex-mini-selfhost.sh install \
+  --user bill \
+  --device macbook \
+  --server relay.example.com \
+  --remote-port 18788 \
+  --ssh-key ~/.ssh/codex_mini_relay \
+  --codex-token replace-with-random-local-token \
+  --relay-token replace-with-random-login-token \
+  --public-base https://relay.example.com/u/bill/macbook
+```
 
-1. 点浏览器底部或菜单里的“分享”
-2. 如果没看到“添加到主屏幕”，先点“查看更多”
-3. 点“添加到主屏幕”，之后从桌面图标打开 Codex Mini
+这个命令会完成：
 
-> 第一次使用时，macOS 可能需要给 Codex Desktop 或 Codex Mini 相关自动化操作授予辅助功能/自动化权限，否则无法把手机输入粘贴并发送到 Codex Desktop。
+- 使用 CDP 参数启动 `Codex.app`，默认端口为 `39252`。
+- 写入两个 LaunchAgent。
+- 启动 Mac 本地 Codex Mini 服务，默认监听 `127.0.0.1:8789`。
+- 建立 SSH 反向隧道，把服务器上的设备端口转发到 Mac 本地服务。
+- 验证本地服务和公网入口是否可用。
 
-<p>
-  <img src="assets/install/add-to-home-step-2.jpg" alt="第 1 步：点击分享" width="220" />
-  <img src="assets/install/add-to-home-step-3.jpg" alt="第 2 步：点击查看更多" width="220" />
-  <img src="assets/install/add-to-home-step-1.jpg" alt="第 3 步：添加到主屏幕" width="220" />
-</p>
+如果省略 `--codex-token`，脚本会自动生成一个本地令牌并打印出来。你需要把这个值写入服务器 `/etc/codex-mini/devices.json` 中对应设备的 `codexToken` 字段。
 
-## 当前版本实现原理
+生成的 LaunchAgent 名称：
 
-Codex Mini 不是云端聊天服务，真正的 Codex 登录状态、线程切换、输入和回复读取都发生在你自己的电脑上。
+```text
+codex-mini.<user-device>.selfhost
+codex-mini.<user-device>.tunnel
+```
 
-核心流程：
+## 日常启动和修复
 
-1. 电脑上由 Codex Mini 管理本地服务
-2. 手机网页把文字或附件发送到这台电脑
-3. 本地服务通过 CDP 控制 Codex Desktop，把内容发送到当前线程
-4. 本地服务读取 Codex 会话状态和回复，并同步回手机网页
-5. 同一 Wi‑Fi 优先走局域网入口；开启 Pro 后可走外网中转入口
+Mac 重启后，可以再次运行同一个 `install` 命令。它是幂等的，会用当前源码目录重新写入 LaunchAgent 并启动服务：
 
-## 本地免费与 Pro 会员
+```bash
+scripts/selfhost/codex-mini-selfhost.sh install ...
+```
 
-- 本地局域网功能永久免费：手机和电脑在同一个 Wi‑Fi / 局域网下即可使用
-- Pro 会员解锁外网入口：通过服务器中转连接自己的电脑，不在同一个 Wi‑Fi 下也可以使用
-- 当前支持 7 天免费试用、月度、季度和年度计划
-- Pro 激活后请重新复制新的外网入口到手机上；旧的局域网入口只适合同一网络下使用
+如果只想按已有 LaunchAgent 配置重启，不重写配置：
 
-## 服务器中转与隐私安全
+```bash
+scripts/selfhost/codex-mini-selfhost.sh start --user bill --device macbook
+```
 
-Codex Mini 的设计原则是：用户自己的电脑为主，服务器只做必要中转。
+如果这台 Mac 只安装了一个自托管设备，脚本可以自动推断设备：
 
-- Codex 登录状态、线程内容和本机访问令牌都保存在用户自己的电脑上
-- 外网入口只把手机请求转回对应用户的电脑，不提供管理员远程打开用户电脑或查看线程的入口
-- Pro 授权使用设备绑定和签名校验
-- 请不要把自己的访问链接、令牌或电脑隐私信息发给陌生人
+```bash
+scripts/selfhost/codex-mini-selfhost.sh start
+```
 
-## 注意事项
+查看本地状态：
 
-- 请确保电脑上已经安装并登录 Codex Desktop
-- 请保持 Codex Desktop 可正常使用
-- 请不要把自己的访问链接、令牌或电脑隐私信息发给陌生人
-- 当前 V4.x 采用全 CDP 控制方案；如果你使用 Codex++ 或其他 CDP 工具，请只保留一个，避免冲突。安装前请彻底删除旧 Codex Mini Beta，旧残留可能导致无法启用受控 Codex。欢迎进群反馈
+```bash
+scripts/selfhost/codex-mini-selfhost.sh status --user bill --device macbook
+```
 
-## 源码说明
+## 用户使用流程
 
-本仓库提供 Codex Mini 的开源维护版本，适合希望自行部署、接入自己的服务器或进行二次开发的用户。
+1. 打开 `https://relay.example.com/login`。
+2. 输入分配好的用户名和转发登录令牌。
+3. 选择要控制的设备。
+4. 浏览器进入 `/u/<user>/<device>/`。
+5. Web 页面通过 SSH 反向隧道控制该用户自己的 Mac。
 
-如果你更希望开箱即用，或者想优先体验最新功能，建议直接下载 Releases 中的 DMG 构建版。构建版会持续维护，部分新功能可能会先在构建版中发布，再逐步同步到开源版本。
+## CDP 控制说明
 
-## License / 授权
+Mac 端服务通过 CDP 控制 Codex Desktop。转发服务器只负责认证用户、选择设备、注入设备对应的 `codexToken` 并代理请求。
 
-Codex Mini is **source-available for non-commercial use only**. You may read, fork, modify, and publish derivative works for personal, educational, research, evaluation, and other non-commercial purposes.
+以下能力都依赖 Mac 端 CDP：
 
-Commercial use requires prior written authorization from the author. Without authorization, you may not sell this project, operate a paid hosted/SaaS/relay service based on it, charge for deployment or maintenance, resell access, or otherwise monetize this project or derivative works.
+- 发送文字和附件。
+- 切换线程。
+- 读取模型、权限、推理强度和上下文用量。
+- 切换模型、权限和推理强度。
+- 停止当前回复。
+- 对队列消息应用引导。
 
-If you fork, modify, redistribute, or publish a derivative work, you must keep clear attribution to the original project and author: **Codex Mini by [CoimgRain](https://github.com/CoimgRain)**, with a link to the original repository: https://github.com/CoimgRain/Codex-Mini
+如果页面提示无法通过 CDP 控制 Codex，可以先检查：
 
-This is not an OSI-approved open source license because it restricts commercial use. See [`LICENSE`](./LICENSE) for the full terms.
+```bash
+curl -sS http://127.0.0.1:39252/json/list | head -c 1000
+curl -sS "http://127.0.0.1:8789/codex/gui-status?token=<codexToken>"
+launchctl print gui/$(id -u)/codex-mini.bill-macbook.selfhost
+launchctl print gui/$(id -u)/codex-mini.bill-macbook.tunnel
+```
 
-中文说明：Codex Mini 仅允许个人、学习、研究、评估等非商业用途使用。允许 fork、修改和继续公开发布，但必须保留对原项目和作者的清晰署名：**Codex Mini by [CoimgRain](https://github.com/CoimgRain)**，并附上原项目链接：https://github.com/CoimgRain/Codex-Mini。未经作者事先书面授权，不得用于商业服务、付费托管、SaaS、中转服务、代部署收费、转售访问权或其他商业化用途。
+## 授权
+
+本 fork 沿用上游的源码可用、非商业授权。完整条款见 [`LICENSE`](./LICENSE)。
+
+原项目署名：Codex Mini by [CoimgRain](https://github.com/CoimgRain)，原仓库：https://github.com/CoimgRain/Codex-Mini
