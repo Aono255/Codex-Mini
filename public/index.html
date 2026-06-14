@@ -1315,6 +1315,50 @@
     }
     .thread-rename-actions .save { color: #5eb4ff; background: rgba(94,180,255,.12); }
     .thread-section + .thread-section { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.07); }
+    .thread-device-card {
+      margin: 2px 2px 10px;
+      padding: 11px 12px;
+      border: 1px solid rgba(94,180,255,.18);
+      border-radius: 18px;
+      background: linear-gradient(rgba(94,180,255,.08), rgba(94,180,255,.08)), rgba(255,255,255,.045);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+    }
+    .thread-device-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 820;
+      line-height: 1.25;
+    }
+    .thread-device-meta {
+      margin-top: 4px;
+      color: var(--faint);
+      font-size: 11px;
+      font-weight: 620;
+      line-height: 1.25;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .thread-device-pill {
+      min-width: 42px;
+      height: 24px;
+      padding: 0 9px;
+      border-radius: 999px;
+      display: inline-grid;
+      place-items: center;
+      background: rgba(142,240,183,.12);
+      color: var(--ok);
+      font-size: 11px;
+      font-weight: 820;
+      white-space: nowrap;
+    }
     .thread-section-label {
       padding: 5px 10px 7px;
       color: var(--faint);
@@ -6308,6 +6352,37 @@
       parent.appendChild(wrap);
     }
 
+    function currentDeviceInfo() {
+      if (!relayDeviceContext) return null;
+      return knownDevices.find(device => isCurrentDevicePath(device.pathPrefix)) || {
+        user: relayDeviceContext.user,
+        device: relayDeviceContext.device,
+        displayName: relayDeviceContext.device,
+        pathPrefix: relayDeviceContext.pathPrefix,
+      };
+    }
+
+    function appendCurrentDeviceHeader(parent) {
+      const device = currentDeviceInfo();
+      if (!device) return;
+      const card = document.createElement('div');
+      const text = document.createElement('div');
+      const name = document.createElement('div');
+      const meta = document.createElement('div');
+      const pill = document.createElement('span');
+      card.className = 'thread-device-card';
+      text.className = 'thread-device-text';
+      name.className = 'thread-device-name';
+      meta.className = 'thread-device-meta';
+      pill.className = 'thread-device-pill';
+      name.textContent = deviceDisplayName(device);
+      meta.textContent = threadDeviceLabel(device);
+      pill.textContent = '当前';
+      text.append(name, meta);
+      card.append(text, pill);
+      parent.appendChild(card);
+    }
+
     function appendDeviceThreadSections() {
       if (!relayDeviceContext) return;
       const otherDevices = knownDevices.filter(device => device.pathPrefix && !isCurrentDevicePath(device.pathPrefix));
@@ -6424,6 +6499,7 @@
 
     function renderThreadMenu() {
       threadMenu.innerHTML = '';
+      appendCurrentDeviceHeader(threadMenu);
       if (!knownThreads.length) {
         const empty = document.createElement('div');
         empty.className = 'empty-thread-menu';
