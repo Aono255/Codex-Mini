@@ -2125,15 +2125,15 @@
     @media (prefers-reduced-motion: reduce) {
       .composer-signature { animation: none; }
     }
-    body.pro-mode .composer {
+    body.color-flow-on .composer {
       border-color: transparent;
       box-shadow: none;
     }
-    body.pro-mode .composer > * {
+    body.color-flow-on .composer > * {
       position: relative;
       z-index: 1;
     }
-    body.pro-mode .composer::before {
+    body.color-flow-on .composer::before {
       content: "";
       position: absolute;
       inset: -1px;
@@ -2149,7 +2149,7 @@
       mask-composite: exclude;
       opacity: .98;
     }
-    body.pro-mode .icon-btn {
+    body.color-flow-on .icon-btn {
       color: transparent;
       -webkit-text-fill-color: transparent;
       background: linear-gradient(92deg, rgba(255,255,255,.54) 0%, rgba(158,203,255,1) 28%, var(--signature-dot-tint-a) 46%, rgba(142,240,183,.9) 64%, var(--signature-dot-tint-b) 78%, rgba(255,255,255,.54) 100%);
@@ -2159,7 +2159,7 @@
       background-clip: text;
       filter: drop-shadow(0 0 10px var(--signature-dot-glow)) drop-shadow(0 0 13px rgba(158,203,255,.16));
     }
-    body.pro-mode .send-btn {
+    body.color-flow-on .send-btn {
       overflow: hidden;
       isolation: isolate;
       background: transparent;
@@ -2168,7 +2168,7 @@
       filter: none;
       text-shadow: 0 1px 1px rgba(255,255,255,.24), 0 0 5px rgba(255,255,255,.18);
     }
-    body.pro-mode .send-btn::before {
+    body.color-flow-on .send-btn::before {
       content: "";
       position: absolute;
       inset: -8px;
@@ -2187,7 +2187,7 @@
       filter: blur(6px) saturate(1.08);
       transform: scale(1.04);
     }
-    body.pro-mode .send-btn::after {
+    body.color-flow-on .send-btn::after {
       content: "";
       position: absolute;
       inset: 1px;
@@ -2197,11 +2197,11 @@
       background: rgba(255,255,255,.08);
       box-shadow: inset 0 1px 5px rgba(255,255,255,.28), inset 0 -4px 8px rgba(0,0,0,.08);
     }
-    body.pro-mode textarea::placeholder {
+    body.color-flow-on textarea::placeholder {
       color: color(display-p3 .74 .88 1 / .82);
       text-shadow: 0 0 12px rgba(158,203,255,.18), 0 0 16px var(--signature-dot-glow);
     }
-    body.pro-mode .thread-menu {
+    body.color-flow-on .thread-menu {
       border-color: transparent;
       background:
         linear-gradient(rgba(24,24,27,.98), rgba(24,24,27,.98)) padding-box,
@@ -2210,27 +2210,27 @@
       background-position: 0 0, 50% 50%;
     }
     @media (min-width: 900px) and (min-height: 650px) {
-      body.pro-mode .thread-menu {
+      body.color-flow-on .thread-menu {
         border-color: var(--line);
         background: rgba(24,24,27,.98);
         background-size: auto;
         background-position: 0 0;
       }
     }
-    body.pro-mode.color-flow-on .composer::before,
-    body.pro-mode.color-flow-on .thread-menu,
-    body.pro-mode.color-flow-on .icon-btn,
-    body.pro-mode.color-flow-on .send-btn::before {
+    body.color-flow-on .composer::before,
+    body.color-flow-on .thread-menu,
+    body.color-flow-on .icon-btn,
+    body.color-flow-on .send-btn::before {
       animation: signatureColorFlow 4.8s ease-in-out infinite;
     }
     @media (min-width: 900px) and (min-height: 650px) {
-      body.pro-mode.color-flow-on .thread-menu { animation: none; }
+      body.color-flow-on .thread-menu { animation: none; }
     }
     @media (prefers-reduced-motion: reduce) {
-      body.pro-mode.color-flow-on .composer::before,
-      body.pro-mode.color-flow-on .thread-menu,
-      body.pro-mode.color-flow-on .icon-btn,
-      body.pro-mode.color-flow-on .send-btn::before { animation: none; }
+      body.color-flow-on .composer::before,
+      body.color-flow-on .thread-menu,
+      body.color-flow-on .icon-btn,
+      body.color-flow-on .send-btn::before { animation: none; }
     }
     .icon-btn, .send-btn {
       appearance: none;
@@ -2544,8 +2544,8 @@
     /* 签名与彩色流动在浅色下的可读性 */
     .theme-light .composer-signature { background: linear-gradient(92deg, rgba(28,28,30,.66) 0%, rgba(23,122,76,.78) 55%, rgba(31,111,208,.72) 100%); -webkit-background-clip: text; background-clip: text; }
     .theme-light body.signature-plain .composer-signature { text-shadow: 0 0 16px rgba(0,0,0,.06); }
-    .theme-light body.pro-mode .icon-btn { background: linear-gradient(92deg, rgba(28,28,30,.72) 0%, rgba(23,122,76,.82) 100%); -webkit-background-clip: text; background-clip: text; }
-    .theme-light body.pro-mode .thread-menu { background: linear-gradient(rgba(252,252,253,.98), rgba(252,252,253,.98)); }
+    .theme-light body.color-flow-on .icon-btn { background: linear-gradient(92deg, rgba(28,28,30,.72) 0%, rgba(23,122,76,.82) 100%); -webkit-background-clip: text; background-clip: text; }
+    .theme-light body.color-flow-on .thread-menu { background: linear-gradient(rgba(252,252,253,.98), rgba(252,252,253,.98)); }
     .theme-light .composer { background: #ffffff; border-color: rgba(0,0,0,.12); box-shadow: 0 6px 22px rgba(31,35,40,.08); }
     .theme-light .permission-menu-item-desc { color: rgba(28,28,30,.56); }
     .theme-light .approval-content { color: rgba(28,28,30,.92); }
@@ -2556,8 +2556,8 @@
     .theme-light .settings-btn { border-color: rgba(0,0,0,.14); background: rgba(0,0,0,.05); color: rgba(28,28,30,.62); }
     .theme-light .settings-btn:active { background: rgba(0,0,0,.09); }
     .theme-light .thread-button:active { background: rgba(0,0,0,.05); }
-    .theme-light body.pro-mode textarea::placeholder { color: rgba(31,111,208,.62); text-shadow: none; }
-    .theme-light body.pro-mode .composer { border-color: transparent; box-shadow: none; }
+    .theme-light body.color-flow-on textarea::placeholder { color: rgba(31,111,208,.62); text-shadow: none; }
+    .theme-light body.color-flow-on .composer { border-color: transparent; box-shadow: none; }
 
   </style>
 </head>
@@ -4164,8 +4164,8 @@
       if (themeColorMeta) themeColorMeta.setAttribute('content', lightTheme ? '#f7f7fa' : '#000000');
       // 把主题写进 cookie，服务端据此决定主屏幕 Web App 首屏的 status-bar-style / theme-light（见 server.js requestPrefersLightTheme）
       try { document.cookie = 'codexMiniTheme=' + (lightTheme ? 'light' : 'dark') + '; Path=' + cookiePath + '; Max-Age=31536000; SameSite=Lax'; } catch (e) {}
-      const colorFlowEffective = Boolean(proMode && appearanceSettings.colorFlowEnabled);
-      document.body.classList.toggle('pro-mode', colorFlowEffective);
+      const colorFlowEffective = Boolean(appearanceSettings.colorFlowEnabled);
+      document.body.classList.toggle('pro-mode', proMode);
       document.body.classList.toggle('color-flow-on', colorFlowEffective);
       document.body.classList.toggle('signature-plain', !appearanceSettings.signatureColorEnabled);
       document.body.classList.toggle('signature-hidden', !appearanceSettings.signatureEnabled);
@@ -4176,9 +4176,9 @@
         settingsProPill.textContent = proMode ? 'Pro' : '普通';
         settingsProPill.classList.toggle('is-on', proMode);
       }
-      if (settingColorRow) settingColorRow.classList.toggle('is-disabled', !proMode);
+      if (settingColorRow) settingColorRow.classList.remove('is-disabled');
       setSwitchState(settingThemeLight, lightTheme, false);
-      setSwitchState(settingColorFlow, colorFlowEffective, !proMode);
+      setSwitchState(settingColorFlow, colorFlowEffective, false);
       setSwitchState(settingProjectSortCodex, appearanceSettings.projectSortMode === 'codex', false);
       setSwitchState(settingSignatureColor, appearanceSettings.signatureColorEnabled, false);
       setSwitchState(settingSignatureEnabled, appearanceSettings.signatureEnabled, false);
@@ -7899,10 +7899,6 @@
     wireInstantActionButton(threadRenameSave, renameCurrentThread);
     wireInstantActionButton(contextQuickCompact, sendContextCompactCommand);
     wireInstantActionButton(settingColorFlow, () => {
-      if (!proMode) {
-        setNotice('彩色流动效果需要 Pro 会员', 'error');
-        return;
-      }
       writeAppearanceSettings({ colorFlowEnabled: !appearanceSettings.colorFlowEnabled });
       setNotice(appearanceSettings.colorFlowEnabled ? '已开启彩色流动效果' : '已关闭彩色流动效果', 'ok');
     });
